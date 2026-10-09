@@ -79,6 +79,7 @@
 			parallax: 0.35, // 마우스 방향으로 도형이 따라 움직이는 거리
 			scroll: true, // 스크롤하면 도형 회전·확대 + 타이틀 위로 사라짐 (#project_visual 높이 필요)
 			scrollChroma: 1.2, // 스크롤 속도만큼 무지개 번짐 증가
+			autoMorph: 2, // 자동 변형: 도형이 멈춰 있는 시간(초)마다 다음 도형으로 (0 = 끔, 클릭 변형은 그대로)
 		},
 		(window.GLASS_CONFIG || {}).fx || {},
 	);
@@ -746,6 +747,7 @@
 			stage.from = stage.to;
 			stage.to = (stage.to + 1) % SHAPES.length;
 			stage.start = -1;
+			stage.end = t; // [TEST] 자동 변형 대기 시작 시점
 			return { from: stage.from, to: stage.to, u: 0 };
 		}
 		return { from: stage.from, to: stage.to, u: ease(c) };
@@ -913,6 +915,9 @@
 		glowP.y += (glowT.y - glowP.y) * ge;
 		glow.value.set(glowP.x * DPR, (H - glowP.y) * DPR);
 
+		// [TEST] 자동 변형: 대기 시간이 지나면 다음 도형으로 (드래그 중·인트로 중엔 기다림, 클릭하면 타이머 초기화)
+		if (stage.end === undefined) stage.end = t;
+		if (!reduce && FX.autoMorph > 0 && stage.start < 0 && !drag.on && intro.s > 0.99 && t - stage.end >= FX.autoMorph) stage.start = t;
 		const st = reduce ? { from: START, to: (START + 1) % SHAPES.length, u: 0 } : stageAt(t);
 		if (st.from !== curFrom) {
 			setPair(st.from, st.to);
