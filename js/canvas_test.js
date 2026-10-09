@@ -138,6 +138,14 @@
 	const textTex = new THREE.CanvasTexture(tc);
 	textTex.minFilter = THREE.LinearFilter;
 	textTex.generateMipmaps = false;
+	// [TEST] 프로젝트 섹션 타이틀: 스크롤하면 도형 앞에서 아래 → 위로 빨려 올라오며 등장
+	const projEl = document.querySelector("#project_site > h2");
+	const projText = projEl ? projEl.textContent.trim().toUpperCase() : "PROJECT";
+	const pc = document.createElement("canvas");
+	const pctx = pc.getContext("2d");
+	const projTex = new THREE.CanvasTexture(pc);
+	projTex.minFilter = THREE.LinearFilter;
+	projTex.generateMipmaps = false;
 
 	/* 반응형: GLASS_CONFIG.responsive = { 1440: {...}, 768: {...} }
 	   CSS의 max-width 미디어 쿼리처럼 화면 너비가 그 값 이하일 때 덮어씀 (작은 쪽이 우선)
@@ -166,6 +174,7 @@
 	function redrawTitle(W, H) {
 		applyResponsive();
 		drawTitle(W, H);
+		drawProj(W, H);
 		// breakpoint에서 폰트/굵기를 바꿨는데 아직 안 불러왔으면 불러온 뒤 다시 그림
 		const fk = `${CFG.textWeight} 120px "${CFG.fontFamily}"`;
 		if (!document.fonts.check(fk)) document.fonts.load(fk).then(() => drawTitle(W, H), () => {});
@@ -226,6 +235,23 @@
 		textTex.needsUpdate = true;
 	}
 
+	// [TEST] PROJECT 글자: 타이틀과 같은 폰트·크기로 화면 가운데
+	function drawProj(W, H) {
+		const nw = Math.max(2, Math.floor(W * DPR)),
+			nh = Math.max(2, Math.floor(H * DPR));
+		if (pc.width !== nw) pc.width = nw;
+		if (pc.height !== nh) pc.height = nh;
+		pctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+		pctx.clearRect(0, 0, W, H);
+		const fs = !sizePx && W <= 1024 ? (W * CFG.textSizeM) / 100 : CFG.textSize;
+		pctx.font = `${CFG.textWeight} ${fs}px ${CFG.fontFamily}, "Arial Black", sans-serif`;
+		pctx.textAlign = "center";
+		pctx.textBaseline = "middle";
+		pctx.fillStyle = CFG.textColor;
+		pctx.fillText(projText, W / 2, H / 2);
+		projTex.needsUpdate = true;
+	}
+
 	/* ---------- 배경(텍스트) 패스 ---------- */
 	const res = { value: new THREE.Vector2(1, 1) };
 	const glow = { value: new THREE.Vector2(0, 0) }; // 그라데이션 중심(px, 캔버스 좌표 · 아래가 0)
@@ -235,6 +261,9 @@
 	const rip = { value: new THREE.Vector3(0, 0, 99) }; // x, y(px), 경과 시간
 	const textShift = { value: 0 };
 	const textA = { value: 1 };
+	const suck = { value: 0 }; // 타이틀 빨려 들어감 0~1
+	const rise = { value: 0 }; // PROJECT 올라옴 0~1
+	const projA = { value: 0 }; // PROJECT 투명도
 	// 색 + 투명도 파싱: "rgba(r,g,b,a)" / "#rrggbbaa" / 일반 색 → { color, alpha }
 	function parseRGBA(str) {
 		const s = String(str || "").trim();
@@ -248,6 +277,31 @@
 		return { color: new THREE.Color(s || "#000"), alpha: 1 };
 	}
 	const bg2 = parseRGBA(CFG.bgColor2);
+	// [TEST] 빨려 들어가는 왜곡 (배경 타이틀·PROJECT 공용)
+	const SUCK_GLSL = `
+      // ss 0 = 제자리, 1 = 위로 완전히 빨려 나감 / flip 1 = 위아래 반대(아래로 빠짐 = 아래에서 올라옴의 역재생)
+      vec2 suckUV(vec2 uv, float ss, float flip){
+        if (flip > 0.5) uv.y = 1.0 - uv.y;
+        float pinch = ss * 0.8 * clamp(uv.y, 0.0, 1.0); // 빨려 가는 쪽일수록 가로로 모임
+        uv.x = 0.5 + (uv.x - 0.5) / max(1.0 - pinch, 0.05);
+        uv.y = (uv.y - ss * 0.55) / (1.0 + ss * 1.6); // 위로 이동 + 세로로 늘어남
+        if (flip > 0.5) uv.y = 1.0 - uv.y;
+        return uv;
+      }
+      vec4 texIn(sampler2D t, vec2 uv){
+        if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return vec4(0.0);
+        vec4 c = texture2D(t, uv);
+        return vec4(c.rgb * c.a, c.a); // 프리멀티플라이 (평균 낼 때 가장자리가 어두워지지 않게)
+      }
+      // 진행도 s(0~1)를 가속(제곱)해서 쓰고, 뒤따르는 꼬리 16샘플을 평균 → 모션 블러
+      vec4 sampleSuck(sampler2D t, vec2 uv, float s, float flip){
+        float ss = s * s;
+        if (ss < 0.0005) return texIn(t, uv);
+        vec4 a = vec4(0.0);
+        for (int i = 0; i < 16; i++) a += texIn(t, suckUV(uv, ss * (1.0 - float(i) / 15.0 * 0.3), flip));
+        return a / 16.0;
+      }
+    `;
 	const bgMat = new THREE.ShaderMaterial({
 		uniforms: {
 			tText: { value: textTex },
@@ -267,12 +321,14 @@
 			uDpr: { value: DPR },
 			uShift: textShift,
 			uTextA: textA,
+			uSuck: suck,
 		},
 		vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
 		fragmentShader: `
       uniform sampler2D tText; uniform vec2 uRes, uGlow, uLens; uniform vec3 uBg1, uBg2, uRip;
-      uniform float uHas2, uGlowSize, uBg2A, uLensAmt, uLensR, uRipAmt, uDpr, uShift, uTextA;
+      uniform float uHas2, uGlowSize, uBg2A, uLensAmt, uLensR, uRipAmt, uDpr, uShift, uTextA, uSuck;
       varying vec2 vUv;
+      ${SUCK_GLSL}
       vec4 tex(vec2 uv){
         if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return vec4(0.0);
         return texture2D(tText, uv);
@@ -300,14 +356,14 @@
           off += rd / rl * sin(k / wpx * 3.14159) * w * uRipAmt * 28.0 * uDpr;
         }
         vec2 uv = (p + off) / uRes;
-        uv.y -= uShift; // 스크롤하면 타이틀이 위로
         // 왜곡된 만큼 RGB 갈라짐
         vec2 sp = off / uRes * 0.18;
-        vec4 ta = tex(uv + sp), tb = tex(uv), tc = tex(uv - sp);
+        // 스크롤하면 타이틀이 위로 빨려 들어감 (uSuck)
+        vec4 ta = sampleSuck(tText, uv + sp, uSuck, 0.0), tb = sampleSuck(tText, uv, uSuck, 0.0), tc = sampleSuck(tText, uv - sp, uSuck, 0.0);
         vec3 col = vec3(
-          mix(bg.r, ta.r, ta.a * uTextA),
-          mix(bg.g, tb.g, tb.a * uTextA),
-          mix(bg.b, tc.b, tc.a * uTextA));
+          bg.r * (1.0 - ta.a * uTextA) + ta.r * uTextA,
+          bg.g * (1.0 - tb.a * uTextA) + tb.g * uTextA,
+          bg.b * (1.0 - tc.a * uTextA) + tc.b * uTextA);
         gl_FragColor = vec4(col, 1.0);
       }`,
 		depthTest: false,
@@ -316,6 +372,25 @@
 	const bgScene = new THREE.Scene();
 	bgScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), bgMat));
 	const orthoCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+	// [TEST] PROJECT 오버레이: 유리 도형 앞에 그림 (굴절 안 됨)
+	const projMat = new THREE.ShaderMaterial({
+		uniforms: { tProj: { value: projTex }, uRes: res, uRise: rise, uProjA: projA },
+		vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+		fragmentShader: `
+      uniform sampler2D tProj; uniform vec2 uRes; uniform float uRise, uProjA;
+      ${SUCK_GLSL}
+      void main(){
+        // uRise 0 = 아래로 빨려 나간 상태 → 1 = 제자리 (빨려 들어가는 효과의 역재생)
+        vec4 c = sampleSuck(tProj, gl_FragCoord.xy / uRes, 1.0 - uRise, 1.0);
+        gl_FragColor = vec4(c.rgb / max(c.a, 1e-4), c.a * uProjA);
+      }`,
+		transparent: true,
+		depthTest: false,
+		depthWrite: false,
+	});
+	const projScene = new THREE.Scene();
+	projScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), projMat));
 
 	/* ---------- 도형: 피라미드(A) ↔ 사각 바(B) 모핑 ---------- */
 	const scene = new THREE.Scene();
@@ -703,6 +778,7 @@
 	// 모바일에서 메모리가 부족하면 브라우저가 WebGL을 회수했다가 돌려줌 → 돌아오면 타이틀 텍스처 다시 올림
 	canvas.addEventListener("webglcontextrestored", () => {
 		textTex.needsUpdate = true;
+		projTex.needsUpdate = true;
 	});
 
 	/* ---------- 리사이즈 / 입력 ---------- */
@@ -884,6 +960,7 @@
 	//    0 = 맨 위, 1 = 프로젝트 섹션이 화면을 덮은 시점, 그 뒤로도 계속 증가
 	const scr = { t: 0, p: 0, v: 0, vs: 0, last: window.scrollY };
 	if (FX.scroll && FXON) {
+		document.documentElement.classList.add("has-proj-fx"); // 캔버스가 PROJECT를 그리므로 DOM 제목은 CSS로 숨김
 		window.addEventListener(
 			"scroll",
 			() => {
@@ -954,7 +1031,7 @@
 		prism.quaternion.premultiply(qUser);
 
 		// [TEST] 스크롤 진행도·속도 (부드럽게 따라감)
-		scr.p += (scr.t - scr.p) * 0.1;
+		scr.p += (scr.t - scr.p) * 0.2;
 		scr.vs += (scr.v - scr.vs) * 0.08;
 		scr.v *= 0.92; // 스크롤 멈추면 속도 감소
 		const sp = Math.min(1, scr.p); // 첫 화면 구간(0~1)
@@ -967,8 +1044,14 @@
 		par.y += (-mouse.y * FX.parallax * 0.6 * m - par.y) * 0.06;
 		prism.position.set(par.x, par.y + sp * 0.2, sp * 1.2);
 		// 타이틀: 스크롤하면 위로 올라가며 사라짐
-		textShift.value = sp * 0.35;
-		textA.value = 1 - Math.min(1, Math.max(0, (sp - 0.1) / 0.45));
+		// 타이틀: 0 → 0.6화면 스크롤 동안 위로 빨려 들어가며 사라짐
+		const s1 = Math.min(1, scr.p / 0.6);
+		suck.value = s1;
+		textA.value = 1 - Math.max(0, (s1 - 0.7) / 0.3);
+		// PROJECT: 0.45 → 1화면 동안 아래에서 빨려 올라와 자리 잡고, 카드가 올라오는 동안(1.6 → 2.1) 사라짐
+		const r1 = Math.min(1, Math.max(0, (scr.p - 0.45) / 0.55));
+		rise.value = r1;
+		projA.value = Math.min(1, r1 / 0.3) * (1 - Math.min(1, Math.max(0, (scr.p - 1.6) / 0.5)));
 		// 스크롤 속도만큼 무지개 번짐
 		backMat.uniforms.uChroma.value = frontMat.uniforms.uChroma.value = CFG.chroma + scr.vs * FX.scrollChroma;
 		// 렌즈 위치·세기
@@ -995,6 +1078,7 @@
 		renderer.render(bgScene, orthoCam);
 		prism.material = frontMat;
 		renderer.render(scene, camera);
+		if (projA.value > 0.001) renderer.render(projScene, orthoCam); // [TEST]
 	}
 	tick();
 })();
