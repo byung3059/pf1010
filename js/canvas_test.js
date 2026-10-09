@@ -769,7 +769,7 @@
 		return hit;
 	}
 	// [TEST] 프로젝트 섹션이 도형 위로 올라오므로 그 위에서는 도형 드래그·클릭·커서 반응 안 함
-	const isUI = (e) => e.target.closest && e.target.closest("a, button, input, label, select, textarea, #project_site");
+	const isUI = (e) => e.target.closest && e.target.closest("a, button, input, label, select, textarea, #project_site, .c_scrollbar");
 	// 커서 상태 알림: 전역 커서(cursor.js)는 <html data-cursor>를 읽고, 없을 땐 기본 커서로 대체
 	const NATIVE = { drag: "grab", grabbing: "grabbing" };
 	function setCursor(s) {
