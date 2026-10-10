@@ -519,8 +519,9 @@
 	}
 	// 프로젝트 섹션·링크 위에서는 반응 안 함
 	const isUI = (e) => e.target.closest && e.target.closest("a, button, input, label, select, textarea, #project_site");
-	// 커서 상태: cursor.js가 <html data-cursor>를 읽음 (없으면 기본 커서)
+	// 커서 상태: cursor.js가 <html data-cursor>를 읽음 (없으면 기본 커서), 인트로 중엔 항상 "skip"
 	function setCursor(s) {
+		if (!intro.done) s = "skip";
 		if (s) root.dataset.cursor = s;
 		else delete root.dataset.cursor;
 		wrap.style.cursor = { drag: "grab", grabbing: "grabbing" }[s] || "";
@@ -562,7 +563,7 @@
 	window.addEventListener("touchmove", (e) => drag.on && e.preventDefault(), { passive: false }); // 도형 돌릴 땐 스크롤 막기
 
 	/* ───────── 6. 인트로 ─────────
-	   1) 로딩: 0 → 100% (4·8의 배수, 자리마다 숫자 롤링) + 진행선 — 도형은 작게 돌며 4 → 6 → 8 → 4각으로 변형
+	   1) 로딩: 0 → 100% (주행계처럼 자리마다 숫자가 이어서 굴러감) + 진행선 — 도형은 작게 돌며 4 → 6 → 8 → 4각으로 변형
 	   2) 공개: 로더가 빠지고 도형이 커지며, 칸막이가 가운데 열부터 한 열씩 끼워짐
 	   3) 타이틀 글자 → 헤더 → 이후 autoMorph초마다 자동 변형 (클릭하면 건너뜀) */
 	let EASE_L = "power4.out"; // 글자 이징 (cubic-bezier(.35, 0, 0, 1))
@@ -588,14 +589,13 @@
 		gsap.set(hdr, { autoAlpha: 0, y: -16 });
 		root.classList.remove("intro-pending");
 
-		const PCT = [0, 4, 8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 100];
 		const font = `"${CFG.fontFamily}", "Unbounded", sans-serif`;
 		const numSize = Math.round((fontSize(window.innerWidth) * 2) / 3); // 숫자 = 타이틀의 2/3
 		const box = document.createElement("div");
 		box.className = "intro2";
 		box.innerHTML = `
 			<div class="i2-meta">
-				<span class="i2-count"><span class="i2-num">${'<span class="i2-d"><b>0</b></span>'.repeat(3)}</span><span class="i2-pct">%</span></span>
+				<span class="i2-count"><span class="i2-num">${`<span class="i2-d"><span>${[..."01234567890"].map((d) => `<b>${d}</b>`).join("")}</span></span>`.repeat(3)}</span><span class="i2-pct">%</span></span>
 				<span class="i2-label">Loading</span>
 			</div>
 			<div class="i2-bar"><i></i></div>`;
@@ -609,9 +609,9 @@
 			.intro2 .i2-num { font-weight: 900; }
 			.intro2 .i2-pct { margin-left: 4px; font-size: 12px; line-height: 16px; letter-spacing: 0.08em; opacity: 0.3; }
 			.intro2 .i2-label { opacity: 0.3; }
-			.intro2 .i2-d { position: relative; display: inline-block; overflow: hidden; vertical-align: bottom; }
-			.intro2 .i2-d b { display: block; font-weight: inherit; }
-			.intro2 .i2-d b + b { position: absolute; left: 0; top: 0; }
+			.intro2 .i2-d { display: inline-block; height: 1em; overflow: hidden; vertical-align: bottom; }
+			.intro2 .i2-d > span { display: block; will-change: transform; }
+			.intro2 .i2-d b { display: block; height: 1em; font-weight: inherit; }
 			.intro2 .i2-bar { position: absolute; left: var(--side); right: var(--side); bottom: var(--bot); height: 1px; background: rgba(255,255,255,0.1); overflow: hidden; }
 			.intro2 .i2-bar i { position: absolute; inset: 0; background: #fff; transform-origin: 0 50%; transform: scaleX(0); }`;
 		document.head.appendChild(css);
@@ -634,25 +634,16 @@
 		fitBase();
 		document.fonts.ready.then(fitBase);
 
-		// 숫자 롤링: 바뀐 자리만 기존 숫자는 위로 빠지고 새 숫자가 아래에서 올라옴
-		const slots = [...box.querySelectorAll(".i2-d")];
-		let numStr = "000";
-		const setNum = (str) => {
-			if (str === numStr) return;
-			slots.forEach((slot, i) => {
-				if (str[i] === numStr[i]) return;
-				if (slot._tl) slot._tl.progress(1); // 이전 롤링이 남아 있으면 마무리
-				const old = slot.firstElementChild;
-				const nu = document.createElement("b");
-				nu.textContent = str[i];
-				slot.appendChild(nu);
-				const roll = { duration: 0.5, ease: "power3.out" };
-				slot._tl = gsap
-					.timeline({ onComplete: () => (old.remove(), gsap.set(nu, { clearProps: "all" }), (slot._tl = null)) })
-					.to(old, { yPercent: -100, ...roll }, i * 0.04)
-					.fromTo(nu, { yPercent: 100 }, { yPercent: 0, ...roll }, i * 0.04);
+		// 숫자 롤링(주행계): 자리마다 0~9(+0) 세로 띠를 값에 따라 연속으로 올림
+		// 일의 자리는 계속 굴러가고, 윗자리는 아랫자리가 9 → 0으로 넘어가는 동안만 같이 굴러감
+		const strips = [...box.querySelectorAll(".i2-d > span")];
+		const setNum = (v) => {
+			strips.forEach((strip, i) => {
+				const unit = 10 ** (strips.length - 1 - i);
+				const carry = Math.max(0, (v % unit) - (unit - 1)); // 아랫자리 마지막 1 동안 0 → 1
+				const pos = (Math.floor(v / unit) % 10) + (unit > 1 ? carry : v % 1);
+				strip.style.transform = `translateY(${(-pos / 11) * 100}%)`;
 			});
-			numStr = str;
 		};
 
 		const colsMax = Math.ceil(window.innerWidth / 2 / CFG.fluteWidth) + 2;
@@ -663,6 +654,7 @@
 			Object.assign(intro, { done: true, lm: -1 });
 			Object.assign(stage, { from: 0, to: 1, start: -1, last: clock.getElapsedTime() });
 			curFrom = -1;
+			if (root.dataset.cursor === "skip") setCursor("");
 			fluteMat.uniforms.uSweep.value = 999;
 			box.remove();
 			css.remove();
@@ -677,7 +669,7 @@
 					ease: "power1.inOut",
 					onUpdate() {
 						intro.lm = load.p * SHAPES.length;
-						setNum(String(PCT[Math.floor(load.p * (PCT.length - 1) + 1e-4)]).padStart(3, "0"));
+						setNum(load.p * 100);
 						bar.style.transform = `scaleX(${load.p})`;
 					},
 				}, 0.3)

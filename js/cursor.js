@@ -1,6 +1,6 @@
 /* cursor.js — 사이트 전역 커스텀 원형 커서 + 마우스 따라다니는 배경 그라데이션
    설정: cursor.js보다 먼저 window.CURSOR_CONFIG = { ... } 로 덮어쓰기 (빠진 값은 아래 기본값)
-   상태: 다른 스크립트가 <html data-cursor="drag|grabbing"> 을 넣으면 그 모양으로 바뀜 (canvas.js가 유리 도형 위에서 사용)
+   상태: 다른 스크립트가 <html data-cursor="drag|grabbing|skip"> 을 넣으면 그 모양으로 바뀜 (canvas_test.js가 유리 도형 위·인트로 중에 사용)
    그라데이션: body 배경을 투명으로 바꾸고(색은 html로 옮김) 그 사이에 고정 레이어로 깔림 → 모든 섹션에서 보임 */
 (() => {
 	const CFG = Object.assign(
@@ -16,6 +16,7 @@
 			linkScale: 3, // 링크·버튼 위에서 확대 배수
 			dragSize: 84, // 유리 도형 위 지름(px)
 			dragText: "DRAG OR CLICK", // 유리 도형 위 글자 (비우면 글자 없음)
+			skipText: "CLICK TO SKIP", // 인트로 중 글자 (클릭하면 인트로 건너뜀, 비우면 글자 없음)
 			hideNative: true, // 기본 마우스 커서 숨김
 		},
 		window.CURSOR_CONFIG || {},
@@ -45,7 +46,7 @@
 		const c = (k) => `rgba(${r},${g},${b},${(a * k).toFixed(4)})`;
 		glowEl = document.createElement("div");
 		glowEl.className = "g-glow";
-		// 부드러운 감쇠 (canvas.js의 smoothstep과 같은 곡선)
+		// 부드러운 감쇠 (canvas_test.js의 smoothstep과 같은 곡선)
 		glowEl.style.cssText = `position:fixed;inset:0;z-index:-1;pointer-events:none;
 			background:radial-gradient(circle var(--gr) at var(--gx) var(--gy), ${c(1)} 0%, ${c(0.84)} 25%, ${c(0.5)} 50%, ${c(0.16)} 75%, ${c(0)} 100%);`;
 		body.prepend(glowEl);
@@ -85,14 +86,18 @@
 		${CFG.mono ? ".g-cursor { -webkit-backdrop-filter: grayscale(1); backdrop-filter: grayscale(1); }" : ""}
 		.g-cursor.is-on { opacity: 1; }
 		.g-cursor.is-link { transform: scale(${CFG.linkScale}); }
-		.g-cursor.is-drag, .g-cursor.is-grabbing { width: ${CFG.dragSize}px; height: ${CFG.dragSize}px;
+		.g-cursor.is-drag, .g-cursor.is-grabbing, .g-cursor.is-skip { width: ${CFG.dragSize}px; height: ${CFG.dragSize}px;
 			margin: ${-CFG.dragSize / 2}px 0 0 ${-CFG.dragSize / 2}px; }
 		.g-cursor.is-grabbing { transform: scale(0.85); }
 		.g-cursor span { display: block; max-width: 78%; text-align: center; white-space: normal;
 			font: 700 11px/1.25 "Pretendard", sans-serif; letter-spacing: .1em; color: #000;
 			margin-right: -.1em; /* 마지막 글자 뒤 자간만큼 보정 → 정확히 가운데 */
 			opacity: 0; transition: opacity .2s; }
-		.g-cursor.is-drag span, .g-cursor.is-grabbing span { opacity: 1; }
+		.g-cursor span { position: absolute; }
+		.g-cursor.is-drag .t-drag, .g-cursor.is-grabbing .t-drag, .g-cursor.is-skip .t-skip { opacity: 1; }
+		.g-cursor .t-skip { color: #fff; } /* difference 블렌드에서 흰 글자 → 배경 반전돼 어두운 인트로 위에서도 보임 */
+		.g-cursor.is-skip { animation: g-cursor-pulse 1.6s ease-in-out infinite; }
+		@keyframes g-cursor-pulse { 50% { scale: 1.08; } }
 		.g-cursor.is-down { transform: scale(0.7); }
 	`;
 	document.head.appendChild(style);
@@ -110,7 +115,7 @@
 
 	const el = document.createElement("div");
 	el.className = "g-cursor";
-	el.innerHTML = CFG.dragText ? `<span>${CFG.dragText}</span>` : "";
+	el.innerHTML = (CFG.dragText ? `<span class="t-drag">${CFG.dragText}</span>` : "") + (CFG.skipText ? `<span class="t-skip">${CFG.skipText}</span>` : "");
 	const mount = () => {
 		setupGlow();
 		document.body.appendChild(el);
@@ -144,7 +149,7 @@
 	// 다른 스크립트가 알려주는 상태 (drag / grabbing) → 바뀌는 즉시 반영
 	function applyState() {
 		const s = document.documentElement.dataset.cursor || "";
-		el.classList.remove("is-drag", "is-grabbing");
+		el.classList.remove("is-drag", "is-grabbing", "is-skip");
 		if (s) el.classList.add("is-" + s, "is-on");
 		if (s) el.classList.remove("is-link");
 	}

@@ -10,7 +10,7 @@
 		display: none;
 	}
 
-	// WebGL을 못 쓰는 기기: 캔버스 대신 DOM 타이틀 표시 (canvas.js가 .is-no-webgl 추가)
+	// WebGL을 못 쓰는 기기: 캔버스 대신 DOM 타이틀 표시 (canvas_test.js가 .is-no-webgl 추가)
 	&.is-no-webgl .slg {
 		z-index: 1;
 		position: absolute;

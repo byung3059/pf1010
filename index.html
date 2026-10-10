@@ -7,7 +7,7 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<meta name="format-detection" content="no" />
 
-		<title>2026 PORTFOLIO (TEST)</title>
+		<title>2026 PORTFOLIO</title>
 		<script>
 			// 인트로 준비: 헤더 깜빡임 방지(intro-pending) + 스크롤 잠금(intro-lock) — canvas_test.js가 풀어 줌, 스크립트가 실패해도 시간 지나면 풀림
 			if ("scrollRestoration" in history) history.scrollRestoration = "manual";
@@ -21,12 +21,12 @@
 		<link rel="stylesheet" href="./css/hd.min.css" />
 		<link rel="stylesheet" href="./css/style.min.css" />
 		<style>
-			/* [TEST] 인트로 전 헤더 깜빡임 방지 (canvas_test.js가 클래스를 지우고 헤더 등장 애니메이션 시작, 4초 뒤엔 무조건 지움) */
+			/* 인트로 전 헤더 깜빡임 방지 (canvas_test.js가 클래스를 지우고 헤더 등장 애니메이션 시작, 4초 뒤엔 무조건 지움) */
 			html.intro-pending #header { visibility: hidden; }
-			/* [TEST] 인트로 중엔 스크롤만 막음(스크롤바는 그대로, js에서 처리), 아래 포트폴리오도 안 보이게 (canvas_test.js가 인트로 끝나면 intro-lock 제거) */
+			/* 인트로 중엔 스크롤만 막음(스크롤바는 그대로, js에서 처리), 아래 포트폴리오도 안 보이게 (canvas_test.js가 인트로 끝나면 intro-lock 제거) */
 			#main > *:not(#project_visual) { transition: opacity 1.2s cubic-bezier(0.22, 1, 0.36, 1), transform 1.2s cubic-bezier(0.22, 1, 0.36, 1); }
 			html.intro-lock #main > *:not(#project_visual) { opacity: 0; transform: translateY(80px); pointer-events: none; }
-			/* [TEST] 헤더: 로고와 메뉴를 한 줄 바에 넣어 양옆 여백을 똑같이(80px / 1660px 이하 40px), 세로 가운데 정렬 */
+			/* 헤더: 로고와 메뉴를 한 줄 바에 넣어 양옆 여백을 똑같이(80px / 1660px 이하 40px), 세로 가운데 정렬 */
 			@media (min-width: 1025px) {
 				#header { top: 40px; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 80px; pointer-events: none; }
 				#header .logo h1, #header #gnb { position: static; }
@@ -34,7 +34,7 @@
 				#header .logo h1 { white-space: nowrap; }
 			}
 			@media (min-width: 1025px) and (max-width: 1660px) { #header { padding: 0 40px; } }
-			/* [TEST] 메뉴: 배경 제거, 간격 16px, 로고(2026 PORTFOLIO)와 같은 글자 크기 */
+			/* 메뉴: 배경 제거, 간격 16px, 로고(2026 PORTFOLIO)와 같은 글자 크기 */
 			@media (min-width: 1025px) {
 				#header #gnb > ul { gap: 16px; }
 				#header #gnb > ul > li > a,
@@ -43,13 +43,13 @@
 				#header .logo h1 { font-family: "Paperlogy", "Pretendard", sans-serif; }
 				#header #gnb > ul > li:hover > a { opacity: 1; }
 			}
-			/* [TEST] 도형 캔버스는 화면에 고정, 프로젝트 섹션이 그 위로 올라옴 */
+			/* 도형 캔버스는 화면에 고정, 프로젝트 섹션이 그 위로 올라옴 */
 			#project_visual { height: 200svh; } /* 1화면은 타이틀 → PROJECT 전환 구간 */
 			#project_visual .canvas_wrap { position: fixed; top: 0; left: 0; width: 100%; height: 100svh; z-index: 0; }
 			#project_site { position: relative; overflow-x: clip; } /* z-index는 주지 않음(카드 WebGL 캔버스가 글자를 덮음) · 카드 이름이 옆에서 들어오는 동안 화면 밖으로 삐져나가 가로 스크롤이 생기지 않게 */
 			#header .logo h1 { white-space: nowrap; } /* 모바일에서도 2026 PORTFOLIO 한 줄 */
 			.has-proj-fx #project_site > h2 { opacity: 0; } /* PROJECT는 캔버스가 그림 (자리·SEO는 유지) */
-			/* [TEST] 프로젝트 카드 — 8px 배수 가이드 (간격·크기·여백 모두 8의 배수) */
+			/* 프로젝트 카드 — 8px 배수 가이드 (간격·크기·여백 모두 8의 배수) */
 			#project_site .pro_list { gap: 80px 40px; }
 			#project_site .pro_site a { border-radius: 8px; }
 			#project_site .pro_card { background: none !important; font-family: "Pretendard", sans-serif; color: #fff; will-change: transform, clip-path; }
@@ -100,7 +100,7 @@
 				#project_site .pro_tag li { height: 24px; padding: 0 16px; font-size: 10px; }
 				#project_site .pro_go { top: 16px; right: 16px; width: 32px; height: 32px; }
 			}
-			/* [TEST] 기본 스크롤바에 디자인만 적용 (넓이 4px) */
+			/* 기본 스크롤바에 디자인만 적용 (넓이 4px) */
 			html { scrollbar-width: thin; scrollbar-color: #3a3a42 #e4e4ec; }
 			::-webkit-scrollbar { width: 4px; height: 4px; }
 			::-webkit-scrollbar-track { background: #e4e4ec; }
@@ -131,7 +131,7 @@
 			// 전역 커서 + 배경 그라데이션 설정 (빠진 값은 cursor.js 기본값 사용)
 			window.CURSOR_CONFIG = {
 				// 마우스 따라다니는 배경 그라데이션 (페이지 전체, 첫 화면 캔버스도 같은 값 사용)
-				glowColor: "", // [TEST] 마우스 따라다니는 배경 빛 끔 (비우면 없음)
+				glowColor: "", // 마우스 따라다니는 배경 빛 끔 (비우면 없음)
 				glowSize: 0.2, // 크기 (화면 대각선 대비 0~1)
 				glowEase: 0.08, // 따라가는 속도 0~1 (낮을수록 느리고 부드럽게)
 
@@ -144,6 +144,7 @@
 				linkScale: 3, // 링크·버튼 위에서 확대 배수
 				dragSize: 80, // 유리 도형 위 지름(px)
 				dragText: "DRAG", // 유리 도형 위 글자 (비우면 글자 없음, 원 안에서 자동 줄바꿈·가운데 정렬)
+				skipText: "CLICK TO SKIP", // 인트로 중 커서 글자 (클릭하면 인트로 건너뜀, 비우면 글자 없음)
 			};
 		</script>
 		<script src="./js/cursor.js" defer></script>
