@@ -521,7 +521,7 @@
 	const isUI = (e) => e.target.closest && e.target.closest("a, button, input, label, select, textarea, #project_site");
 	// 커서 상태: cursor.js가 <html data-cursor>를 읽음 (없으면 기본 커서), 인트로 중엔 항상 "skip"
 	function setCursor(s) {
-		if (!intro.done) s = "skip";
+		if (!intro.done && !intro.skipped) s = "skip";
 		if (s) root.dataset.cursor = s;
 		else delete root.dataset.cursor;
 		wrap.style.cursor = { drag: "grab", grabbing: "grabbing" }[s] || "";
@@ -565,7 +565,7 @@
 	/* ───────── 6. 인트로 ─────────
 	   1) 로딩: 0 → 100% (4·8의 배수만 표시, 바뀐 자리만 위로 빠지고 새 숫자가 올라옴) + 진행선 — 도형은 작게 돌며 4 → 6 → 8 → 4각으로 변형
 	   2) 공개: 로더가 빠지고 도형이 커지며, 칸막이가 가운데 열부터 한 열씩 끼워짐
-	   3) 타이틀 글자 → 헤더 → 이후 autoMorph초마다 자동 변형 (클릭하면 건너뜀) */
+	   3) 타이틀 글자 → 헤더 → 이후 autoMorph초마다 자동 변형 (로딩 중 클릭하면 100%로 건너뛰고 2)부터 재생) */
 	let EASE_L = "power4.out"; // 글자 이징 (cubic-bezier(.35, 0, 0, 1))
 	if (HAS_GSAP && window.CustomEase) {
 		gsap.registerPlugin(CustomEase);
@@ -576,7 +576,7 @@
 
 	const clock = new THREE.Clock();
 	// s: 크기 배율, face: 1이면 인트로 자세(rx·ry)로 고정, lm: 로딩 중 변형 진행(0~3, -1 = 끝)
-	const intro = { done: true, s: 1, face: 0, rx: 0.4, ry: -0.55, lm: -1 };
+	const intro = { done: true, s: 1, face: 0, rx: 0.4, ry: -0.55, lm: -1, skipped: false };
 	const stage = { from: 0, to: 1, start: -1, last: 0 }; // 자동 변형 상태 (start < 0 = 대기)
 	let curFrom = -1,
 		introStart = null;
@@ -685,6 +685,7 @@
 					},
 				}, 0.3)
 				// 2) 공개
+				.addLabel("reveal", 3.4)
 				.to(loader, { y: -16, autoAlpha: 0, duration: 0.7, ease: "power2.inOut", stagger: 0.06 }, 3.4)
 				.to(intro, { s: 1, duration: 2.0, ease: "power3.inOut" }, 3.4)
 				.add(() => gsap.fromTo(flash, { value: 0.35 }, { value: 0, duration: 1.6, ease: "power2.out" }), 3.6)
@@ -694,7 +695,13 @@
 				.add(() => !titleOut && showChars(titleFlat, 0), 4.6)
 				.to(hdr, { autoAlpha: 1, y: 0, duration: 0.8, ease: "power3.out", stagger: 0.06 }, 5.0);
 		};
-		window.addEventListener("click", () => tl && !intro.done && tl.progress(1));
+		// 스킵: 로딩만 100%로 넘기고 공개 애니메이션은 그대로 재생 (공개가 시작된 뒤엔 클릭 무시)
+		window.addEventListener("click", () => {
+			if (!tl || intro.done || intro.skipped || tl.time() >= tl.labels.reveal) return;
+			intro.skipped = true;
+			tl.seek("reveal", false); // false: 건너뛴 구간의 콜백도 실행 → 숫자 100%, 진행선 끝까지
+			if (root.dataset.cursor === "skip") setCursor("");
+		});
 	} else {
 		root.classList.remove("intro-pending");
 	}
