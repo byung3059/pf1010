@@ -1271,41 +1271,44 @@
 			const wordCut = (tl, text, at, from) =>
 				tl
 					.set(word, { textContent: text, autoAlpha: 1 }, at)
-					.fromTo(word, { xPercent: -50 + from, filter: "blur(24px)", scaleX: 1.4 }, { xPercent: -50, filter: "blur(0px)", scaleX: 1, duration: 0.32, ease: "expo.out" }, at);
+					.fromTo(word, { xPercent: -50 + from, filter: "blur(16px)", scaleX: 1.2, autoAlpha: 0 }, { xPercent: -50, filter: "blur(0px)", scaleX: 1, autoAlpha: 1, duration: 0.5, ease: "power3.out" }, at);
 			// 초근접 컷: 구도를 '툭' 바꾸고 컷 안에서 천천히 흐름
 			const camCut = (tl, at, c) =>
 				tl
-					.set(intro, { s: c.s, px: c.x, py: c.y, rx: c.rx, ry: c.ry }, at)
-					.to(intro, { px: c.x + c.dx, ry: c.ry + 0.35, duration: 0.33, ease: "none" }, at);
+					.to(intro, { s: c.s, px: c.x, py: c.y, rx: c.rx, ry: c.ry, duration: 0.18, ease: "power2.inOut" }, at)
+					.to(intro, { px: c.x + c.dx, ry: c.ry + 0.35, duration: 0.33, ease: "sine.inOut" }, at + 0.18);
 			introStart = () => {
 				gsap.ticker.add(tick3);
 				const tl = (introTl = gsap.timeline({ onComplete: finish }));
+				tl.timeScale(0.62); // 전체를 천천히 (약 4.5초 → 7초)
 				// 0) 레터박스 + 키네틱 타이포 (검은 배경 위)
 				wordCut(tl, "DETAIL", 0.1, 30);
 				wordCut(tl, "ORIENTED.", 0.45, -30);
-				tl.set(word, { autoAlpha: 0 }, 0.85);
+
 				// 1) 유리 초근접 컷 3개 (검은 막을 걷어 장면을 보여 줌)
-				tl.set($(".i3-black"), { autoAlpha: 0 }, 0.9);
+				tl.to(word, { autoAlpha: 0, duration: 0.15, ease: "power1.in" }, 0.72)
+					.to($(".i3-black"), { autoAlpha: 0, duration: 0.25, ease: "power1.out" }, 0.8);
+				tl.set(intro, { s: 3.4, px: 1.6, py: 0.4, rx: 0.2, ry: -1.1 }, 0.8);
 				camCut(tl, 0.9, { s: 3.4, x: 1.6, y: 0.4, rx: 0.2, ry: -1.1, dx: -0.6 });
 				camCut(tl, 1.23, { s: 2.6, x: -1.2, y: -0.6, rx: 0.9, ry: 0.2, dx: 0.5 });
 				camCut(tl, 1.56, { s: 4.2, x: 0.2, y: 1.4, rx: -0.3, ry: -0.4, dx: -0.4 });
 				// 2) 각의 수 몽타주: 숫자가 컷마다 바뀌며 도형도 같이 변형 (가운데 구도)
-				tl.set(intro, { s: 1.4, px: 0, py: 0, rx: 0.4, ry: -0.55 }, 1.9);
+				tl.to(intro, { s: 1.4, px: 0, py: 0, rx: 0.4, ry: -0.55, duration: 0.3, ease: "power2.inOut" }, 1.8);
 				const SEQ = [["04", 0], ["08", 2], ["16", 4], ["24", 5], ["40", 7], ["○", 8]];
 				SEQ.forEach(([label, lm], k) => {
 					const at = 1.9 + k * 0.15;
-					tl.set(numEl, { textContent: label, autoAlpha: 1, scale: 1.15 }, at)
-						.to(numEl, { scale: 1, duration: 0.15, ease: "power2.out" }, at)
-						.to(intro, { lm, duration: 0.15, ease: "power2.out" }, at);
+					tl.set(numEl, { textContent: label }, at)
+						.fromTo(numEl, { autoAlpha: 0.2, scale: 1.08 }, { autoAlpha: 1, scale: 1, duration: 0.15, ease: "power2.out" }, at)
+						.to(intro, { lm, duration: 0.15, ease: "sine.inOut" }, at);
 				});
 				tl.set(intro, { lm: 0 }, 1.9) // 4각에서 시작
-					.set(numEl, { autoAlpha: 0 }, 2.8)
+					.to(numEl, { autoAlpha: 0, duration: 0.2, ease: "power1.in" }, 2.7)
 					.to(intro, { lm: 9, duration: 0.25, ease: "power2.in" }, 2.65) // 원 → 다시 4각
 					// 3) 흰 플래시 → 줌아웃 + 빠른 회전 → 제자리, 레터박스 열림
-					.to($(".i3-flash"), { opacity: 1, duration: 0.06, ease: "none" }, 2.8)
-					.to($(".i3-flash"), { opacity: 0, duration: 0.5, ease: "power2.out" }, 2.86)
-					.set(intro, { s: 0.2, spin: -5 }, 2.82)
-					.to(intro, { s: 1, spin: 0, duration: 1.4, ease: "expo.out" }, 2.86)
+					.to($(".i3-flash"), { opacity: 0.55, duration: 0.12, ease: "power1.in" }, 2.76)
+					.to($(".i3-flash"), { opacity: 0, duration: 0.9, ease: "power2.out" }, 2.88)
+					.set(intro, { s: 0.3, spin: -3.2 }, 2.86)
+					.to(intro, { s: 1, spin: 0, duration: 1.6, ease: "power3.out" }, 2.88)
 					.to(intro, { face: 0, duration: 2.0, ease: "expo.out" }, 3.0)
 					.to(fluteMat.uniforms.uShift, { value: fluteTarget.s, duration: 0.6, ease: "power2.out" }, 2.86)
 					.to([$(".i3-top")], { yPercent: -100, duration: 0.9, ease: "expo.inOut" }, 3.1)
