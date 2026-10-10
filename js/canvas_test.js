@@ -85,7 +85,7 @@
 			autoMorph: 3, // 자동 변형 간격(초): 변형이 시작되는 시점끼리의 간격 (0 = 끔, 클릭 변형은 그대로)
 			spin: 0.6, // 도형이 계속 도는 속도(라디안/초, 세로축) — 0 = 기존처럼 살짝 흔들리기만
 			flute: 0.32, // 유리 칸막이(세로 골 유리) 굴절 세기 — 글자·도형 앞에 화면 전체로 깔림 (0 = 끔)
-			fluteWidth: 40, // 골 하나의 폭(px)
+			fluteWidth: 80, // 골 하나의 폭(px)
 		},
 		(window.GLASS_CONFIG || {}).fx || {},
 	);
@@ -796,7 +796,7 @@
 			uW: { value: CFG.fx.fluteWidth * DPR },
 			uAmt: { value: CFG.fx.flute },
 			uBloom: { value: CFG.bloom },
-			uBloomR: { value: 9 * DPR },
+			uBloomR: { value: 13 * DPR },
 		},
 		vertexShader: `void main(){ gl_Position = vec4(position.xy, 0.0, 1.0); }`,
 		fragmentShader: `
