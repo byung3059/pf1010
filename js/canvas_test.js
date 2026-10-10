@@ -1062,10 +1062,10 @@
 		frame = 0;
 	if (FX.intro && FXON && window.gsap) {
 		// [TEST] 인트로
-		//   1) 선   : 칸막이 골 경계와 같은 자리에 아주 옅은 선(rgba 255,255,255,0.1)이 가운데에서 양쪽으로 쫘악 그어짐
-		//   2) 사각 : 완전 흰색(#FFFFFF) 사각형 라인이 위 가운데에서 양쪽으로 그려짐 (너트 정면 크기 그대로)
-		//   3) 입체 : 그 라인에서 유리 너트가 툭 튀어나오며 두께가 솟고, 살짝 기울어 옆면이 보였다가 평소 자세로
-		//   4) 정렬 : 선이 그대로 격자 유리 칸막이로 바뀜 → 타이틀 → 헤더
+		//   1) 점선 : 칸막이 골 경계와 같은 자리에 아주 옅은 점선(rgba 255,255,255,0.1)이 가운데에서 양쪽으로 쫘악 그어짐
+		//   2) 유리 : 점선이 그대로 지금의 격자 유리 칸막이로 바뀜
+		//   3) 사각 : 완전 흰색(#FFFFFF) 사각형 라인이 위 가운데에서 양쪽으로 그려짐 (너트 정면 크기 그대로)
+		//   4) 입체 : 그 흰 라인이 도형으로 바뀌며 3D로 툭 튀어나옴 (두께가 솟고 살짝 기울어 옆면) → 평소 자세 → 타이틀 → 헤더
 		intro.s = 1;
 		intro.spin = 0;
 		intro.depth = 0.02;
@@ -1104,6 +1104,7 @@
 			if (S.lines > 0 && S.linesA > 0) {
 				oc.strokeStyle = `rgba(255,255,255,${0.1 * S.linesA})`;
 				oc.lineWidth = 1;
+				oc.setLineDash([4, 4]); // 점선 (border: dashed 느낌, 8px 주기)
 				oc.beginPath();
 				const far = Math.hypot(w, h) / 2;
 				const reach = S.lines * far * 1.25; // 가운데에서 이 거리까지 선이 생김
@@ -1112,8 +1113,11 @@
 					const q = Math.min(1, Math.max(0, (reach - dx) / (far * 0.35)));
 					if (q <= 0) continue;
 					const e = 1 - Math.pow(1 - q, 3);
-					oc.moveTo(Math.round(x) + 0.5, cy - (h / 2) * e);
-					oc.lineTo(Math.round(x) + 0.5, cy + (h / 2) * e);
+					const vx = Math.round(x) + 0.5;
+					oc.moveTo(vx, cy);
+					oc.lineTo(vx, cy - (h / 2) * e);
+					oc.moveTo(vx, cy);
+					oc.lineTo(vx, cy + (h / 2) * e);
 				}
 				for (let yb = G; yb < h; yb += G) {
 					const y = h - yb;
@@ -1121,15 +1125,19 @@
 					const q = Math.min(1, Math.max(0, (reach - dy) / (far * 0.35)));
 					if (q <= 0) continue;
 					const e = 1 - Math.pow(1 - q, 3);
-					oc.moveTo(cx - (w / 2) * e, Math.round(y) + 0.5);
-					oc.lineTo(cx + (w / 2) * e, Math.round(y) + 0.5);
+					const hy = Math.round(y) + 0.5;
+					oc.moveTo(cx, hy);
+					oc.lineTo(cx - (w / 2) * e, hy);
+					oc.moveTo(cx, hy);
+					oc.lineTo(cx + (w / 2) * e, hy);
 				}
 				oc.stroke();
+				oc.setLineDash([]);
 			}
 			// ── 사각형 라인: 완전 흰색(#FFFFFF), 너트를 정면에서 본 크기 그대로 — 12시 가운데에서 시작해 양쪽으로 그려져 아래에서 만남
 			if (S.sq > 0 && S.sqA > 0) {
 				const ppw = h / 2 / (Math.tan((camera.fov * Math.PI) / 360) * camera.position.z); // 월드 1 = px
-				const hs = 2.1 * Math.cos(Math.PI / 4) * ppw;
+				const hs = 2.1 * Math.cos(Math.PI / 4) * ppw * (1 + intro.pop * 0.12); // 튀어나오는 유리와 같이 커짐
 				const per = hs * 8; // 사각형 둘레
 				const len = (per / 2) * S.sq; // 한쪽으로 그려진 길이
 				oc.strokeStyle = `rgba(255,255,255,${S.sqA})`;
@@ -1172,28 +1180,28 @@
 				},
 			});
 			introTl
-				// 1) 선: 가운데에서 양쪽으로 쫘악 (rgba 255,255,255,0.1)
+				// 1) 점선: 가운데에서 양쪽으로 쫘악 (rgba 255,255,255,0.1)
 				.to(S, { lines: 1, duration: 1.1, ease: "power2.inOut" }, 0.15)
-				// 2) 사각형 라인 (#FFFFFF)
-				.to(S, { sq: 1, duration: 0.7, ease: "power3.inOut" }, 1.0)
-				// 3) 라인에서 입체가 튀어나옴: 유리가 나타나며 두께가 앞으로 솟고, 살짝 기울어 옆면이 보임
+				// 2) 점선 → 지금의 격자 유리 칸막이로 (선이 옅어지는 동시에 그 자리에서 유리가 어긋나기 시작)
+				.to(S, { linesA: 0, duration: 0.8, ease: "power2.inOut" }, 1.3)
+				.to(fluteMat.uniforms.uShift, { value: fluteTarget.s, duration: 0.8, ease: "power2.inOut" }, 1.3)
+				.to(fluteMat.uniforms.uShiftT, { value: fluteTarget.t, duration: 0.8, ease: "power2.inOut" }, 1.3)
+				// 3) 흰색(#FFFFFF) 사각형 라인 — 유리 칸막이 너머로 그려짐
+				.to(S, { sq: 1, duration: 0.7, ease: "power3.inOut" }, 2.0)
+				// 4) 흰 라인이 그대로 도형이 되며 3D로 튀어나옴: 번쩍 → 두께가 앞으로 솟고 살짝 기울어 옆면이 보임
 				.add(() => {
 					build.value = 1;
 					gsap.fromTo(flash, { value: 1 }, { value: 0, duration: 0.9, ease: "power2.out" });
-				}, 1.75)
-				.to(intro, { depth: 1, duration: 0.9, ease: "back.out(2.2)" }, 1.75)
-				.fromTo(intro, { pop: 0 }, { pop: 1, duration: 0.25, ease: "power2.out", yoyo: true, repeat: 1 }, 1.75) // 순간 툭 커졌다 돌아옴
-				.to(intro, { rx: 0.45, ry: -0.6, duration: 0.8, ease: "power3.out" }, 1.8)
-				.to(S, { sqA: 0, duration: 0.5, ease: "power2.out" }, 1.95) // 사각형 라인은 유리 테두리로 녹아듦
-				.to(intro, { face: 0, duration: 1.4, ease: "expo.out" }, 2.5) // 평소 자세로
-				// 4) 선 → 그대로 격자 유리 칸막이로
-				.to(S, { linesA: 0, duration: 0.8, ease: "power2.inOut" }, 2.4)
-				.to(fluteMat.uniforms.uShift, { value: fluteTarget.s, duration: 0.9, ease: "power2.inOut" }, 2.4)
-				.to(fluteMat.uniforms.uShiftT, { value: fluteTarget.t, duration: 0.9, ease: "power2.inOut" }, 2.4)
+				}, 2.75)
+				.to(intro, { depth: 1, duration: 0.9, ease: "back.out(2.2)" }, 2.75)
+				.fromTo(intro, { pop: 0 }, { pop: 1, duration: 0.25, ease: "power2.out", yoyo: true, repeat: 1 }, 2.75) // 순간 툭 커졌다 돌아옴
+				.to(intro, { rx: 0.45, ry: -0.6, duration: 0.8, ease: "power3.out" }, 2.8)
+				.to(S, { sqA: 0, duration: 0.45, ease: "power2.out" }, 2.85) // 흰 라인은 유리 테두리로 녹아듦
+				.to(intro, { face: 0, duration: 1.4, ease: "expo.out" }, 3.5) // 평소 자세로
 				.add(() => {
 					if (!titleOut) gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
-				}, 2.7) // 타이틀
-				.to(hdr, { autoAlpha: 1, y: 0, duration: 0.6, ease: "power4.out", stagger: 0.05 }, 3.0); // 헤더
+				}, 3.6) // 타이틀
+				.to(hdr, { autoAlpha: 1, y: 0, duration: 0.6, ease: "power4.out", stagger: 0.05 }, 3.9); // 헤더
 		};
 		// 인트로 중 클릭하면 바로 완성
 		window.addEventListener("click", () => {
