@@ -39,27 +39,27 @@
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 		<script>
 			// 유리 캔버스 설정 (빠진 값은 canvas.js 기본값 사용)
-			// [TEST] 색감: 무채색 크롬 유리 (무지개 끔, 흰 테두리·반사 띠 강하게)
+			// [TEST] 색감: 어둡고 투명한 유리 (반사 띠 약하게, 속은 살짝 뿌옇게, 모서리에 옅은 색 번짐)
 			window.GLASS_CONFIG = {
 				bgColor: "#000000", // 배경색 (마우스 그라데이션은 아래 CURSOR_CONFIG의 glow* 사용)
 				textColor: "#ffffff", // 타이틀 글자색
 				pointColor: "#ffffff", // 포인트 점 색
 				glassColor: "#ffffff", // 유리 색 (흰색 = 무색)
 				clear: [1, 1, 1], // 도형별 투명도 0~1 (너트, 링, 큐브)
-				chroma: 0.04, // 무지개 번짐 세기 (0 = 번짐 없음)
-				saturation: 0, // 채도 (0 = 흑백)
+				chroma: 0.08, // 무지개 번짐 세기 (0 = 번짐 없음)
+				saturation: 0.05, // 채도 (0 = 흑백)
 				refraction: 1, // 굴절 세기
-				shine: 1.6, // 반사광(하이라이트) 세기
+				shine: 1.5, // 반사광(하이라이트) 세기
 				edgeRainbow: 0, // 모서리 무지개 세기 0~1
 				edgeDark: 0, // 모서리 어두운 테두리 0~1 (밝은 배경일 때 윤곽용)
-				blur: 0.02, // 유리 속 번짐(블러) 0 = 선명, 기본 0.1
+				blur: 0.08, // 유리 속 번짐(블러) 0 = 선명, 기본 0.1
 				rainbowFrom: 0.3, // 무지개가 시작되는 기울기 0~1 (낮을수록 면 전체로 넓게)
 				rainbowDeep: 0, // 무지개 진하기 0~1 (1 = 진한 빨강·남색까지 프리즘처럼)
 				rimWhite: 1, // 실루엣 흰 테두리 0~1
 				bodyShade: 0, // 몸통 음영 0~1 (흰 배경에서 입체감)
-				darkReflect: 0.55, // 어두운 반사 띠 세기 0~1 (스튜디오 유리 느낌)
-				reflectFringe: 0.01, // 반사 띠 경계의 색 갈라짐 폭 (호박/파랑 테두리, 0 = 흑백)
-				lightReflect: 0.9, // 밝은 반사 띠 세기 0~1 (어두운 배경에서 입체감)
+				darkReflect: 0.1, // 어두운 반사 띠 세기 0~1 (스튜디오 유리 느낌)
+				reflectFringe: 0.03, // 반사 띠 경계의 색 갈라짐 폭 (호박/파랑 테두리, 0 = 흑백)
+				lightReflect: 0.4, // 밝은 반사 띠 세기 0~1 (어두운 배경에서 입체감)
 
 				// 뒤 타이틀 글자
 				fontFamily: "Paperlogy", // 폰트 (페이지에 로드된 폰트)
