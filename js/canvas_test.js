@@ -286,6 +286,9 @@
 	const rip = { value: new THREE.Vector3(0, 0, 99) }; // x, y(px), 경과 시간
 	const textShift = { value: 0 };
 	const textA = { value: 1 };
+	// [TEST] 인트로 선 텍스처 (처음엔 빈 1px — 인트로가 2D 캔버스로 바꿔 끼움)
+	const linesTexU = { value: new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat) };
+	linesTexU.value.needsUpdate = true;
 	const build = { value: 1 }; // [TEST] 도형이 만들어지는 진행도 0~1 (1 = 완성)
 	const projA = { value: 1 }; // PROJECT 투명도 (사라질 때는 글자 효과로 처리하므로 1 고정)
 	// 색 + 투명도 파싱: "rgba(r,g,b,a)" / "#rrggbbaa" / 일반 색 → { color, alpha }
@@ -304,6 +307,7 @@
 	const bgMat = new THREE.ShaderMaterial({
 		uniforms: {
 			tText: { value: textTex },
+			tLines: linesTexU, // [TEST] 인트로 점선 (배경에 그려서 유리 칸막이 굴절을 같이 받게)
 			uRes: res,
 			uBg1: { value: new THREE.Color(CFG.bgColor) },
 			uBg2: { value: bg2.color },
@@ -323,7 +327,7 @@
 		},
 		vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
 		fragmentShader: `
-      uniform sampler2D tText; uniform vec2 uRes, uGlow, uLens; uniform vec3 uBg1, uBg2, uRip;
+      uniform sampler2D tText, tLines; uniform vec2 uRes, uGlow, uLens; uniform vec3 uBg1, uBg2, uRip;
       uniform float uHas2, uGlowSize, uBg2A, uLensAmt, uLensR, uRipAmt, uDpr, uShift, uTextA;
       varying vec2 vUv;
       vec4 tex(vec2 uv){
@@ -360,6 +364,7 @@
           mix(bg.r, ta.r, ta.a * uTextA),
           mix(bg.g, tb.g, tb.a * uTextA),
           mix(bg.b, tc.b, tc.a * uTextA));
+        col = mix(col, vec3(1.0), texture2D(tLines, gl_FragCoord.xy / uRes).a); // 인트로 선
         gl_FragColor = vec4(col, 1.0);
       }`,
 		depthTest: false,
@@ -1063,8 +1068,8 @@
 	if (FX.intro && FXON && window.gsap) {
 		// [TEST] 인트로
 		//   1) 점선 : 칸막이 골 경계와 같은 자리에 아주 옅은 점선(rgba 255,255,255,0.1)이 가운데에서 양쪽으로 쫘악 그어짐
-		//   2) 유리 : 점선이 그대로 지금의 격자 유리 칸막이로 바뀜
-		//   3) 입체 : 유리 칸막이 너머에서 도형이 천천히 3D로 튀어나옴 (커지며 두께가 솟고 살짝 기울어 옆면) → 평소 자세 → 타이틀 → 헤더
+		//   2) 입체 : 도형이 천천히 3D로 튀어나옴 (커지며 두께가 솟고 살짝 기울어 옆면)
+		//   3) 효과 : 그 순간 점선이 실선으로 이어지며 유리 칸막이 굴절이 걸림 → 선이 계단처럼 어긋나다 사라짐 → 평소 자세 → 타이틀 → 헤더
 		intro.s = 1;
 		intro.spin = 0;
 		intro.depth = 0.02;
@@ -1084,10 +1089,14 @@
 		const ov = document.createElement("canvas");
 		ov.className = "intro_layout";
 		ov.style.cssText = "position:fixed;inset:0;width:100%;height:100%;z-index:50;pointer-events:none;";
-		document.body.appendChild(ov);
 		const oc = ov.getContext("2d");
+		// 화면에 직접 붙이지 않고 배경 텍스처로 → 선도 유리 칸막이에 굴절되어 어긋나 보임
+		const linesTex = new THREE.CanvasTexture(ov);
+		linesTex.minFilter = THREE.LinearFilter;
+		linesTex.generateMipmaps = false;
+		linesTexU.value = linesTex;
 		const G = CFG.fx.fluteWidth || 40; // 칸막이 골 폭 = 선 간격 → 선이 그대로 유리 골 경계가 됨
-		const S = { lines: 0, linesA: 1, sq: 0, sqA: 1 };
+		const S = { lines: 0, linesA: 1, sq: 0, sqA: 1, solid: 0 }; // solid: 점선 → 실선으로 바뀌는 정도
 		function drawIntro() {
 			const w = window.innerWidth,
 				h = window.innerHeight,
@@ -1101,9 +1110,9 @@
 			// ── 선: 칸막이 골 경계와 같은 자리 (세로: 왼쪽에서 G 간격 / 가로: 아래에서 G 간격 — 셰이더의 gl_FragCoord 기준)
 			//    가운데 가까운 선부터 차례로, 각 선은 가운데에서 양 끝으로 '쫘악' 뻗음
 			if (S.lines > 0 && S.linesA > 0) {
-				oc.strokeStyle = `rgba(255,255,255,${0.1 * S.linesA})`;
+				oc.strokeStyle = `rgba(255,255,255,${(0.1 + 0.1 * S.solid) * S.linesA})`; // 실선이 되며 살짝 밝아짐
 				oc.lineWidth = 1;
-				oc.setLineDash([4, 4]); // 점선 (border: dashed 느낌, 8px 주기)
+				oc.setLineDash([4 + 4 * S.solid, 4 - 4 * S.solid + 0.001]); // 점선(4/4) → 실선으로 이어짐
 				oc.beginPath();
 				const far = Math.hypot(w, h) / 2;
 				const reach = S.lines * far * 1.25; // 가운데에서 이 거리까지 선이 생김
@@ -1164,6 +1173,7 @@
 					oc.stroke();
 				}
 			}
+			linesTex.needsUpdate = true;
 		}
 
 		let introTl = null;
@@ -1175,25 +1185,28 @@
 					intro.done = true;
 					stage.last = clock.getElapsedTime();
 					gsap.ticker.remove(drawIntro);
-					ov.remove();
+					linesTexU.value = new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat);
+					linesTexU.value.needsUpdate = true;
+					linesTex.dispose();
 				},
 			});
 			introTl
 				// 1) 점선: 가운데에서 양쪽으로 쫘악 (rgba 255,255,255,0.1)
 				.to(S, { lines: 1, duration: 1.1, ease: "power2.inOut" }, 0.15)
-				// 2) 점선 → 지금의 격자 유리 칸막이로 (선이 옅어지는 동시에 그 자리에서 유리가 어긋나기 시작)
-				.to(S, { linesA: 0, duration: 0.8, ease: "power2.inOut" }, 1.3)
-				.to(fluteMat.uniforms.uShift, { value: fluteTarget.s, duration: 0.8, ease: "power2.inOut" }, 1.3)
-				.to(fluteMat.uniforms.uShiftT, { value: fluteTarget.t, duration: 0.8, ease: "power2.inOut" }, 1.3)
-				// 3) 유리 칸막이 너머에서 도형이 천천히 3D로 튀어나옴: 작고 납작한 상태 → 커지며 두께가 앞으로 솟고 살짝 기울어 옆면이 보임
+				// 2) 도형이 천천히 3D로 튀어나옴: 작고 납작한 상태 → 커지며 두께가 앞으로 솟고 살짝 기울어 옆면이 보임
 				.add(() => {
 					build.value = 1;
 					gsap.fromTo(flash, { value: 0.6 }, { value: 0, duration: 1.6, ease: "power2.out" }); // 은은하게 번쩍
-				}, 1.9)
-				.fromTo(intro, { s: 0.55 }, { s: 1, duration: 2.0, ease: "expo.out" }, 1.9)
-				.to(intro, { depth: 1, duration: 2.0, ease: "back.out(1.4)" }, 1.95)
-				.fromTo(intro, { pop: 0 }, { pop: 1, duration: 0.6, ease: "power2.out", yoyo: true, repeat: 1 }, 2.0) // 툭 커졌다 돌아옴 (천천히)
-				.to(intro, { rx: 0.45, ry: -0.6, duration: 1.8, ease: "power3.out" }, 2.0)
+				}, 1.4)
+				.fromTo(intro, { s: 0.55 }, { s: 1, duration: 2.0, ease: "expo.out" }, 1.4)
+				.to(intro, { depth: 1, duration: 2.0, ease: "back.out(1.4)" }, 1.45)
+				.fromTo(intro, { pop: 0 }, { pop: 1, duration: 0.6, ease: "power2.out", yoyo: true, repeat: 1 }, 1.5)
+				.to(intro, { rx: 0.45, ry: -0.6, duration: 1.8, ease: "power3.out" }, 1.5)
+				// 3) 같은 순간 점선이 실선으로 이어지며 유리 칸막이 효과가 걸림 → 선이 계단처럼 어긋나다 유리 속으로 사라짐
+				.to(S, { solid: 1, duration: 0.5, ease: "power2.inOut" }, 1.45)
+				.to(fluteMat.uniforms.uShift, { value: fluteTarget.s, duration: 1.0, ease: "power2.inOut" }, 1.6)
+				.to(fluteMat.uniforms.uShiftT, { value: fluteTarget.t, duration: 1.0, ease: "power2.inOut" }, 1.6)
+				.to(S, { linesA: 0, duration: 0.9, ease: "power2.in" }, 2.1)
 				.to(intro, { face: 0, duration: 2.2, ease: "expo.out" }, 3.4) // 평소 자세로
 				.add(() => {
 					if (!titleOut) gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
