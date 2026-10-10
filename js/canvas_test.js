@@ -1199,8 +1199,9 @@
 				if (introTl && !intro.done) introTl.progress(1);
 			});
 		} else if (INTRO === 3) {
-			// ───────── 인트로 3: 컷 없이 이어지는 한 컷(롱테이크) 영상 ─────────
-			//   카메라가 유리 너트 구멍 가장자리에 아주 가깝게 붙어 있다가(굴절 과장) 천천히 돌며 뒤로 빠져나와 전체가 보임
+			// ───────── 인트로 3: 건축 영상처럼 — 디테일 컷 4개 → 롱테이크 줌아웃 ─────────
+			//   도형의 모서리·구멍 가장자리·옆면·윗변을 아주 크게 잡은 컷을 하나씩 보여 주고(컷 사이 짧게 검은 화면)
+			//   마지막 컷에서 끊지 않고 천천히 돌며 뒤로 빠져나와 전체가 보임
 			//   → 굴절이 평소 세기로 가라앉으며 칸막이가 가운데 열부터 끼워짐 → 진짜 타이틀(캔버스)이 올라옴 → 헤더
 			//   화면에 따로 띄우는 글자는 작은 캡션 2개(기존 여백 40px 자리)뿐이라 겹치거나 남는 글자 없음
 			reveal.value = 999;
@@ -1240,7 +1241,7 @@
 			const H = { a: 0, frame: 0, rings: 0, ruler: 0, labels: 0, dots: 0, planes: 0, collapse: 0 }; // 각 요소 투명도/진행
 			const pulses = []; // 동심원 시작 시각
 			let lastPulse = 0;
-			// 점 · 선 · 면 — 선은 1px · rgba(255,255,255,0.1)로만, 점과 면으로 강조
+			// 점 · 선 — 선은 1px · rgba(255,255,255,0.1)로만, 점으로 강조 (면 없음)
 			const LINE = (a) => `rgba(255,255,255,${0.1 * a})`;
 			const G = CFG.fx.fluteWidth || 40;
 			const cellSeed = (x, y) => (Math.sin(x * 127.1 + y * 311.7) * 43758.5453) % 1; // 칸마다 고정 난수
@@ -1255,28 +1256,14 @@
 				if (H.a <= 0) return;
 				const ppw = h / 2 / (Math.tan((camera.fov * Math.PI) / 360) * camera.position.z);
 				const k = 1 - H.collapse; // 마지막에 가운데로 접힘
-				const cx = w / 2 + (intro.px || 0) * ppw,
-					cy = h / 2 - (intro.py || 0) * ppw;
-				const half = Math.min(Math.max(w, h) / 2 - 40, 2.4 * (intro.s || 1) * ppw) * (0.6 + 0.4 * H.frame) * k;
+				const cx = w / 2,
+					cy = h / 2; // HUD는 화면 가운데 고정 (디테일 컷에서도 화면 기준)
+				const half = Math.min(Math.min(w, h) / 2 - 40, 2.4 * (intro.s || 1) * ppw) * (0.6 + 0.4 * H.frame) * k;
 				// 칸 좌표 (칸막이 골과 같은 40px 격자: 왼쪽·아래 기준)
 				const gx0 = Math.floor((cx - half) / G),
 					gx1 = Math.ceil((cx + half) / G);
 				const gy0 = Math.floor((h - (cy + half)) / G),
 					gy1 = Math.ceil((h - (cy - half)) / G);
-				// ── 면: 프레임 안 40px 칸이 하나씩 켜졌다 꺼짐 (반투명 면)
-				if (H.planes > 0) {
-					for (let gx = gx0; gx < gx1; gx++)
-						for (let gy = gy0; gy < gy1; gy++) {
-							const r = Math.abs(cellSeed(gx, gy));
-							const on = Math.max(0, Math.sin(ms * 0.004 + r * 40) - 0.6) / 0.4; // 칸마다 다른 박자로 깜빡
-							if (on <= 0) continue;
-							hc.fillStyle = `rgba(255,255,255,${0.07 * on * H.planes * H.a})`;
-							hc.fillRect(gx * G, h - (gy + 1) * G, G, G);
-						}
-					// 프레임 전체 면 (아주 옅게)
-					hc.fillStyle = `rgba(255,255,255,${0.025 * H.planes * H.a})`;
-					hc.fillRect(cx - half, cy - half, half * 2, half * 2);
-				}
 				hc.lineWidth = 1;
 				// ── 선 (모두 1px · 0.1): 가운데 십자 (화면 끝까지), 프레임 테두리, 동심원, 눈금
 				if (H.frame > 0) {
@@ -1367,39 +1354,60 @@
 			};
 			introStart = () => {
 				gsap.ticker.add(tick3);
-				introTl = gsap.timeline({ onComplete: finish, defaults: { overwrite: "auto" } });
+				introTl = gsap.timeline({ onComplete: finish });
+				const blk = $(".i3-black");
+				// 건축 영상처럼: 도형의 한 부분을 아주 크게 잡은 디테일 컷 → 컷 안에서 천천히 흐름 → 검은 화면으로 짧게 끊고 다음 부분
+				// (lx, ly) = 화면 가운데에 올 도형 위 지점(로컬 좌표), s = 확대 배율
+				const SHOTS = [
+					{ lx: 1.4, ly: 1.4, s: 6.5, rx: 0.2, ry: -1.2, dx: -0.25, dry: 0.15 }, // 바깥 모서리
+					{ lx: 0.0, ly: -1.15, s: 7.0, rx: 0.9, ry: -0.2, dx: 0.3, dry: -0.12 }, // 구멍 아래쪽 가장자리
+					{ lx: -1.48, ly: 0.3, s: 5.5, rx: -0.2, ry: -1.6, dx: 0.2, dry: 0.18 }, // 옆면
+					{ lx: 0.6, ly: 1.3, s: 6.0, rx: 0.5, ry: -0.8, dx: -0.2, dry: 0.1 }, // 윗변 + 구멍
+				];
+				const SHOT = 0.95; // 컷 하나 길이(초)
+				introTl.set(intro, { spinOn: false }, 0);
+				SHOTS.forEach((c, n) => {
+					const at = 0.1 + n * SHOT;
+					const set = { s: c.s, px: -c.lx * c.s, py: -c.ly * c.s, rx: c.rx, ry: c.ry };
+					introTl
+						.set(intro, set, at)
+						// 컷 안 카메라 흐름 (천천히 옆으로 + 살짝 돎)
+						.to(intro, { px: set.px + c.dx * c.s * 0.2, ry: c.ry + c.dry, s: c.s * 1.04, duration: SHOT, ease: "sine.inOut" }, at);
+					// 컷 사이: 검은 화면으로 짧게 끊음 (첫 컷은 검은 화면이 걷히며 시작)
+					if (n === 0) introTl.to(blk, { autoAlpha: 0, duration: 0.5, ease: "power2.out" }, at);
+					else introTl.fromTo(blk, { autoAlpha: 1 }, { autoAlpha: 0, duration: 0.22, ease: "power2.out" }, at);
+					if (n < SHOTS.length - 1) introTl.to(blk, { autoAlpha: 1, duration: 0.1, ease: "power1.in" }, at + SHOT - 0.1);
+				});
+				const T = 0.1 + SHOTS.length * SHOT - 0.35; // 마지막 컷 끝나기 조금 전부터 줌아웃 (컷 → 롱테이크로 이어짐)
 				introTl
-					// 검은 화면이 서서히 걷히며 초근접 장면 (캡션은 한 번 나타났다 한 번 사라짐 — 겹치는 트윈 없음)
-					.to($(".i3-black"), { autoAlpha: 0, duration: 1.2, ease: "power2.out" }, 0.1)
 					.to($(".i3-cap"), { autoAlpha: 0.56, duration: 0.8, ease: "power2.out", stagger: 0.1 }, 0.4)
-					// 모션 그래픽 HUD: 프레임이 '착' 잡히고 → 펄스·눈금·수치가 차례로 붙음
+					// 모션 그래픽 HUD: 프레임·점·눈금·펄스·수치
 					.set(H, { a: 1 }, 0.3)
 					.to(H, { frame: 1, duration: 0.6, ease: "back.out(2)" }, 0.5)
+					.to(H, { dots: 1, duration: 0.5, ease: "none" }, 0.65)
 					.to(H, { ruler: 1, duration: 0.6, ease: "power2.out" }, 0.8)
 					.to(H, { rings: 1, duration: 0.4, ease: "none" }, 1.0)
 					.to(H, { labels: 1, duration: 0.4, ease: "none" }, 1.2)
-					.to(H, { dots: 1, duration: 0.5, ease: "none" }, 0.65) // 점
-					.to(H, { planes: 1, duration: 0.6, ease: "none" }, 1.0) // 면
-					// 롱테이크: 천천히 돌며 뒤로 빠져나옴 (구도·크기·각도가 한 곡선으로 함께)
-					.to(intro, { s: 1, px: 0, py: 0, rx: 0.4, ry: -0.55, duration: 3.6, ease: "power2.inOut" }, 0.3)
-					// 빠져나올수록 굴절이 평소 세기로 가라앉음
-					.to(fluteMat.uniforms.uShift, { value: fluteTarget.s, duration: 3.2, ease: "power2.inOut" }, 0.6)
-					// 다 보이면 은은하게 한 번 빛나고, 칸막이가 가운데 열부터 끼워짐
-					.add(() => gsap.fromTo(flash, { value: 0.3 }, { value: 0, duration: 1.4, ease: "power2.out" }), 3.6)
-					.set(fluteMat.uniforms.uSweep, { value: 0 }, 3.6)
-					.to(fluteMat.uniforms.uSweep, { value: colsMax, duration: 1.4, ease: "power2.inOut" }, 3.6)
-					.to(fluteMat.uniforms.uShiftT, { value: fluteTarget.t, duration: 1.2, ease: "power2.out" }, 3.8)
-					.to(intro, { face: 0, duration: 2.2, ease: "power2.inOut" }, 3.9)
-					.to($(".i3-cap"), { autoAlpha: 0, duration: 0.6, ease: "power2.in" }, 4.0)
+					// 롱테이크 줌아웃: 디테일에서 천천히 돌며 빠져나와 전체가 보임
+					.add(() => (intro.spinOn = true), T)
+					.to(intro, { s: 1, px: 0, py: 0, rx: 0.4, ry: -0.55, duration: 3.0, ease: "power2.inOut" }, T)
+					.to(fluteMat.uniforms.uShift, { value: fluteTarget.s, duration: 2.6, ease: "power2.inOut" }, T + 0.2)
 					// HUD는 도형 쪽으로 접히며 사라짐
-					.to(H, { rings: 0, labels: 0, ruler: 0, dots: 0, planes: 0, duration: 0.4, ease: "power2.in" }, 3.5)
-					.to(H, { collapse: 1, duration: 0.5, ease: "power3.in" }, 3.6)
-					.to(H, { a: 0, duration: 0.2, ease: "none" }, 4.0)
+					.to(H, { rings: 0, labels: 0, ruler: 0, dots: 0, duration: 0.4, ease: "power2.in" }, T + 2.4)
+					.to(H, { collapse: 1, duration: 0.5, ease: "power3.in" }, T + 2.5)
+					.to(H, { a: 0, duration: 0.2, ease: "none" }, T + 2.9)
+					// 다 보이면 은은하게 빛나고 칸막이가 가운데 열부터 끼워짐
+					.add(() => gsap.fromTo(flash, { value: 0.3 }, { value: 0, duration: 1.4, ease: "power2.out" }), T + 3.0)
+					.set(fluteMat.uniforms.uSweep, { value: 0 }, T + 3.0)
+					.to(fluteMat.uniforms.uSweep, { value: colsMax, duration: 1.4, ease: "power2.inOut" }, T + 3.0)
+					.to(fluteMat.uniforms.uShiftT, { value: fluteTarget.t, duration: 1.2, ease: "power2.out" }, T + 3.2)
+					.to(intro, { face: 0, duration: 2.2, ease: "power2.inOut" }, T + 3.2)
+					.to($(".i3-cap"), { autoAlpha: 0, duration: 0.6, ease: "power2.in" }, T + 3.2)
 					// 진짜 타이틀(캔버스) → 헤더
 					.add(() => {
 						if (!titleOut) gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
-					}, 4.2)
-					.to(hdr, { autoAlpha: 1, y: 0, duration: 0.8, ease: "power3.out", stagger: 0.06 }, 4.6);
+					}, T + 3.5)
+					.to(hdr, { autoAlpha: 1, y: 0, duration: 0.8, ease: "power3.out", stagger: 0.06 }, T + 3.9);
 			};
 			window.addEventListener("click", () => {
 				if (introTl && !intro.done) introTl.progress(1);
