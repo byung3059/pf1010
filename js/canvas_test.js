@@ -1442,7 +1442,7 @@
 			const box = document.createElement("div");
 			box.className = "intro2";
 			box.innerHTML = `
-				<div class="i2-meta"><span class="i2-count"><span class="i2-num">000</span><span class="i2-pct">%</span></span><span>Loading</span></div>
+				<div class="i2-meta"><span class="i2-count"><span class="i2-num"><span class="i2-d"><b>0</b></span><span class="i2-d"><b>0</b></span><span class="i2-d"><b>0</b></span></span><span class="i2-pct">%</span></span><span>Loading</span></div>
 				<div class="i2-bar"><i></i></div>
 `;
 			const css = document.createElement("style");
@@ -1460,12 +1460,41 @@
 				.intro2 .i2-count { font-size: ${fsT}px; line-height: 1; font-weight: 100; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
 				.intro2 .i2-num { opacity: 1; color: #fff; font-weight: 900; }
 				.intro2 .i2-pct { opacity: 0.3; }
+				/* 숫자 롤링: 자리마다 바뀔 때 아래에서 위로 올라옴 */
+				.intro2 .i2-d { position: relative; display: inline-block; overflow: hidden; vertical-align: bottom; }
+				.intro2 .i2-d b { display: block; font-weight: inherit; }
+				.intro2 .i2-d b + b { position: absolute; left: 0; top: 0; }
 `;
 			document.head.appendChild(css);
 			document.body.appendChild(box);
 			const $ = (q) => box.querySelector(q);
 			const num = $(".i2-num"),
 				bar = $(".i2-bar i");
+			const slots = [...box.querySelectorAll(".i2-d")];
+			let numStr = "000";
+			const setNum = (str) => {
+				if (str === numStr) return;
+				slots.forEach((slot, i) => {
+					if (str[i] === numStr[i]) return;
+					// 이전 롤링이 남아 있으면 즉시 마무리
+					if (slot._tl) slot._tl.progress(1);
+					const old = slot.firstElementChild;
+					const nu = document.createElement("b");
+					nu.textContent = str[i];
+					slot.appendChild(nu);
+					slot._tl = gsap
+						.timeline({
+							onComplete() {
+								old.remove();
+								gsap.set(nu, { clearProps: "all" });
+								slot._tl = null;
+							},
+						})
+						.to(old, { yPercent: -100, duration: 0.36, ease: "power3.inOut" }, i * 0.03)
+						.fromTo(nu, { yPercent: 100 }, { yPercent: 0, duration: 0.36, ease: "power3.inOut" }, i * 0.03);
+				});
+				numStr = str;
+			};
 			const colsMax = Math.ceil(window.innerWidth / 2 / (CFG.fx.fluteWidth || 40)) + 2;
 			const load = { p: 0 };
 			let introTl = null;
@@ -1493,7 +1522,7 @@
 						ease: "power1.inOut",
 						onUpdate() {
 							intro.lm = load.p * 9;
-							num.textContent = String(PCT[Math.min(PCT.length - 1, Math.floor(load.p * (PCT.length - 1) + 0.0001))]).padStart(3, "0");
+							setNum(String(PCT[Math.min(PCT.length - 1, Math.floor(load.p * (PCT.length - 1) + 0.0001))]).padStart(3, "0"));
 							bar.style.transform = `scaleX(${load.p})`;
 						},
 					}, 0.3)
