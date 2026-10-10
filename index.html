@@ -7,12 +7,110 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<meta name="format-detection" content="no" />
 
-		<title>2026 PORTFOLIO</title>
+		<title>2026 PORTFOLIO (TEST)</title>
+		<script>
+			// 인트로 준비: 헤더 깜빡임 방지(intro-pending) + 스크롤 잠금(intro-lock) — canvas_test.js가 풀어 줌, 스크립트가 실패해도 시간 지나면 풀림
+			if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+			document.documentElement.classList.add("intro-pending", "intro-lock");
+			setTimeout(function () { document.documentElement.classList.remove("intro-pending"); }, 4000);
+			setTimeout(function () { document.documentElement.classList.remove("intro-lock"); }, 20000);
+		</script>
 		<link rel="stylesheet" href="./css/reset.min.css" />
 		<link rel="stylesheet" href="./css/fonts.css" />
 		<link rel="stylesheet" href="./css/layout.min.css" />
 		<link rel="stylesheet" href="./css/hd.min.css" />
 		<link rel="stylesheet" href="./css/style.min.css" />
+		<style>
+			/* [TEST] 인트로 전 헤더 깜빡임 방지 (canvas_test.js가 클래스를 지우고 헤더 등장 애니메이션 시작, 4초 뒤엔 무조건 지움) */
+			html.intro-pending #header { visibility: hidden; }
+			/* [TEST] 인트로 중엔 스크롤만 막음(스크롤바는 그대로, js에서 처리), 아래 포트폴리오도 안 보이게 (canvas_test.js가 인트로 끝나면 intro-lock 제거) */
+			#main > *:not(#project_visual) { transition: opacity 1.2s cubic-bezier(0.22, 1, 0.36, 1), transform 1.2s cubic-bezier(0.22, 1, 0.36, 1); }
+			html.intro-lock #main > *:not(#project_visual) { opacity: 0; transform: translateY(80px); pointer-events: none; }
+			/* [TEST] 헤더: 로고와 메뉴를 한 줄 바에 넣어 양옆 여백을 똑같이(80px / 1660px 이하 40px), 세로 가운데 정렬 */
+			@media (min-width: 1025px) {
+				#header { top: 40px; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 80px; pointer-events: none; }
+				#header .logo h1, #header #gnb { position: static; }
+				#header .logo, #header #gnb { pointer-events: auto; }
+				#header .logo h1 { white-space: nowrap; }
+			}
+			@media (min-width: 1025px) and (max-width: 1660px) { #header { padding: 0 40px; } }
+			/* [TEST] 메뉴: 배경 제거, 간격 16px, 로고(2026 PORTFOLIO)와 같은 글자 크기 */
+			@media (min-width: 1025px) {
+				#header #gnb > ul { gap: 16px; }
+				#header #gnb > ul > li > a,
+				#header #gnb > ul > li:hover > a { padding: 0; font-size: 16px; line-height: 16px; background: none; backdrop-filter: none; border-radius: 0; }
+				#header #gnb > ul > li > a { opacity: 0.56; transition: opacity 0.3s; font-family: "Paperlogy", "Pretendard", sans-serif; }
+				#header .logo h1 { font-family: "Paperlogy", "Pretendard", sans-serif; }
+				#header #gnb > ul > li:hover > a { opacity: 1; }
+			}
+			/* [TEST] 도형 캔버스는 화면에 고정, 프로젝트 섹션이 그 위로 올라옴 */
+			#project_visual { height: 200svh; } /* 1화면은 타이틀 → PROJECT 전환 구간 */
+			#project_visual .canvas_wrap { position: fixed; top: 0; left: 0; width: 100%; height: 100svh; z-index: 0; }
+			#project_site { position: relative; overflow-x: clip; } /* z-index는 주지 않음(카드 WebGL 캔버스가 글자를 덮음) · 카드 이름이 옆에서 들어오는 동안 화면 밖으로 삐져나가 가로 스크롤이 생기지 않게 */
+			#header .logo h1 { white-space: nowrap; } /* 모바일에서도 2026 PORTFOLIO 한 줄 */
+			.has-proj-fx #project_site > h2 { opacity: 0; } /* PROJECT는 캔버스가 그림 (자리·SEO는 유지) */
+			/* [TEST] 프로젝트 카드 — 8px 배수 가이드 (간격·크기·여백 모두 8의 배수) */
+			#project_site .pro_list { gap: 80px 40px; }
+			#project_site .pro_site a { border-radius: 8px; }
+			#project_site .pro_card { background: none !important; font-family: "Pretendard", sans-serif; color: #fff; will-change: transform, clip-path; }
+			/* 이미지: 카드보다 위아래로 크게 → 스크롤 패럴랙스 여유, 호버 확대는 scale 속성(GSAP transform과 따로 동작) */
+			#project_site .pro_img { position: absolute; left: 0; top: -8%; width: 100%; height: 116%; background: no-repeat center center / cover; transition: scale 0.8s cubic-bezier(0.35, 0, 0, 1); will-change: transform; }
+			#project_site .pro_site.--01 .pro_img { background-image: url("./images/1.jpg"); }
+			#project_site .pro_site.--02 .pro_img { background-image: url("./images/2.jpg"); }
+			#project_site .pro_site.--03 .pro_img { background-image: url("./images/3.jpg"); }
+			#project_site .pro_site.--04 .pro_img { background-image: url("./images/4.jpg"); }
+			#project_site .pro_site.--05 .pro_img { background-image: url("./images/5.jpg"); }
+			#project_site .pro_site.--06 .pro_img { background-image: url("./images/6.jpg"); }
+			#project_site .pro_site.--07 .pro_img { background-image: url("./images/7.jpg"); }
+			#project_site .pro_site.--08 .pro_img { background-image: url("./images/8.jpg"); }
+			#project_site .pro_site.--09 .pro_img { background-image: url("./images/9.jpg"); }
+			#project_site .pro_site.--10 .pro_img { background-image: url("./images/10.jpg"); }
+			/* 호버 시: 어두운 막 + 소개 */
+			#project_site .pro_info { z-index: 2; position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; padding: 24px 24px 96px; background: rgba(0, 0, 0, 0.56); opacity: 0; transition: opacity 0.4s; }
+			#project_site .pro_info > * { transform: translateY(16px); opacity: 0; transition: transform 0.6s cubic-bezier(0.35, 0, 0, 1), opacity 0.6s; }
+			#project_site .pro_tit { display: block; font-size: 24px; line-height: 32px; font-weight: 700; letter-spacing: -0.02em; }
+			#project_site .pro_line { display: block; width: 296px; max-width: 100%; height: 1px; margin: 24px 0; background: rgba(255, 255, 255, 0.4); transition-delay: 0.04s; }
+			#project_site .pro_desc { transition-delay: 0.08s; }
+			#project_site .pro_desc li { position: relative; padding-left: 8px; font-size: 14px; line-height: 24px; color: rgba(255, 255, 255, 0.88); }
+			#project_site .pro_desc li::before { content: ""; position: absolute; left: 0; top: 11px; width: 2px; height: 2px; border-radius: 50%; background: currentColor; }
+			/* 바로가기 아이콘 (오른쪽 위) */
+			#project_site .pro_go { z-index: 3; position: absolute; top: 24px; right: 24px; width: 56px; height: 56px; color: #fff; opacity: 0; translate: -8px 8px; transition: opacity 0.4s, translate 0.6s cubic-bezier(0.35, 0, 0, 1); }
+			#project_site .pro_go svg { display: block; width: 100%; height: 100%; }
+			/* 태그 칩 (왼쪽 아래) — 평소 흰색, 호버 시 반투명 */
+			#project_site .pro_tag { z-index: 3; position: absolute; left: 24px; bottom: 24px; display: flex; flex-wrap: wrap; gap: 8px; }
+			#project_site .pro_tag li { display: flex; align-items: center; height: 32px; padding: 0 24px; border-radius: 4px; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08); color: #111; font-size: 12px; font-weight: 700; letter-spacing: 0.02em; transition: background-color 0.4s, color 0.4s; }
+			/* 호버 애니메이션은 1024px 이상 + 마우스 기기에서만 */
+			@media (min-width: 1024px) and (hover: hover) {
+				#project_site .pro_card:hover .pro_img { scale: 1.06; }
+				#project_site .pro_card:hover .pro_info,
+				#project_site .pro_card:focus-visible .pro_info { opacity: 1; }
+				#project_site .pro_card:hover .pro_info > *,
+				#project_site .pro_card:focus-visible .pro_info > * { transform: none; opacity: 1; }
+				#project_site .pro_card:hover .pro_go,
+				#project_site .pro_card:focus-visible .pro_go { opacity: 1; translate: 0 0; }
+				#project_site .pro_card:hover .pro_tag li,
+				#project_site .pro_card:focus-visible .pro_tag li { background: rgba(255, 255, 255, 0.16); color: #fff; }
+			}
+			/* 프로젝트명: 카드 아래 오른쪽 */
+			#project_site .pro_name { z-index: 2; position: relative; margin-top: 16px; font-family: "Pretendard", sans-serif; font-size: 24px; line-height: 32px; font-weight: 700; color: #fff; text-align: right; }
+			@media (max-width: 768px) {
+				#project_site .pro_list { gap: 48px; }
+				#project_site .pro_name { margin-top: 8px; font-size: 16px; line-height: 24px; }
+				#project_site .pro_tag { left: 16px; bottom: 16px; }
+				#project_site .pro_tag li { height: 24px; padding: 0 16px; font-size: 10px; }
+				#project_site .pro_go { top: 16px; right: 16px; width: 32px; height: 32px; }
+			}
+			/* [TEST] 기본 스크롤바에 디자인만 적용 (넓이 4px) */
+			html { scrollbar-width: thin; scrollbar-color: #3a3a42 #e4e4ec; }
+			::-webkit-scrollbar { width: 4px; height: 4px; }
+			::-webkit-scrollbar-track { background: #e4e4ec; }
+			::-webkit-scrollbar-thumb { background: #3a3a42; border-radius: 99px; }
+			::-webkit-scrollbar-thumb:active { background: #222228; }
+			@media (max-width: 1024px) {
+				html { scrollbar-width: none; }
+				::-webkit-scrollbar { display: none; width: 0; height: 0; }
+			}
+		</style>
 
 		<script src="https://code.jquery.com/jquery-1.12.4.min.js"></script>
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.5/gsap.min.js"></script>
@@ -22,75 +120,18 @@
 		<script src="https://unpkg.com/@studio-freight/lenis@1.0.42/dist/lenis.min.js"></script>
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 		<script>
-			// 유리 캔버스 설정 (빠진 값은 canvas.js 기본값 사용)
+			// 유리 캔버스 설정 — 빠진 값은 js/canvas_test.js 맨 위 기본값 사용 (지금 화면 = 기본값)
 			window.GLASS_CONFIG = {
-				bgColor: "#000000", // 배경색 (마우스 그라데이션은 아래 CURSOR_CONFIG의 glow* 사용)
-				textColor: "#ffffff", // 타이틀 글자색
-				pointColor: "#ffffff", // 포인트 점 색
-				glassColor: "#ffffff", // 유리 색 (흰색 = 무색)
-				clear: [1, 1, 1], // 도형별 투명도 0~1 (너트, 링, 큐브)
-				chroma: 0.45, // 무지개 번짐 세기 (0 = 번짐 없음)
-				saturation: 1.15, // 채도 (0 = 흑백)
-				refraction: 1, // 굴절 세기
-				shine: 1.0, // 반사광(하이라이트) 세기
-				edgeRainbow: 0.8, // 모서리 무지개 세기 0~1
-				edgeDark: 0, // 모서리 어두운 테두리 0~1 (밝은 배경일 때 윤곽용)
-				blur: 0.02, // 유리 속 번짐(블러) 0 = 선명, 기본 0.1
-				rainbowFrom: 0.3, // 무지개가 시작되는 기울기 0~1 (낮을수록 면 전체로 넓게)
-				rainbowDeep: 0.1, // 무지개 진하기 0~1 (1 = 진한 빨강·남색까지 프리즘처럼)
-				rimWhite: 0.75, // 실루엣 흰 테두리 0~1
-				bodyShade: 0, // 몸통 음영 0~1 (흰 배경에서 입체감)
-				darkReflect: 0, // 어두운 반사 띠 세기 0~1 (스튜디오 유리 느낌)
-				reflectFringe: 0.02, // 반사 띠 경계의 색 갈라짐 폭 (호박/파랑 테두리, 0 = 흑백)
-				lightReflect: 0.5, // 밝은 반사 띠 세기 0~1 (어두운 배경에서 입체감)
-
-				// 뒤 타이틀 글자
-				fontFamily: "Paperlogy", // 폰트 (페이지에 로드된 폰트)
-				textWeight: 900, // 굵기
-				textSize: 140, // 크기(px) — 화면 1024px 초과
-				textSizeM: 11.5, // 크기(vw) — 화면 1024px 이하
-				lineHeight: 1, // 줄 간격 (글자 크기 배수, 1.2 = 120%)
-				textAlign: "left", // 가로 정렬: "left" | "center" | "right"
-				textVAlign: "bottom", // 세로 정렬: "top" | "center" | "bottom"
-				textX: 80, // 가로 여백(px): left면 왼쪽에서, right면 오른쪽에서, center면 가운데에서 이동(+오른쪽)
-				textY: 80, // 세로 여백(px): top이면 위에서, bottom이면 아래에서, center면 가운데에서 이동(+아래)
-
-				// 타이틀 반응형 — CSS의 @media (max-width: 숫자)처럼 화면 너비가 그 값 이하일 때 덮어씀 (작은 값이 우선)
-				// 바꿀 수 있는 값: fontFamily, textWeight, textSize, textSizeM, lineHeight, textAlign, textVAlign, textX, textY, textColor, pointColor
-				// textSize(px)를 적은 구간은 1024px 이하여도 textSizeM(vw) 대신 textSize(px) 사용
-				responsive: {
-					1660: { textX: 40, textY: 40 },
-					768: { textX: 20, textY: 40 },
-					480: { textY: 24 },
-				},
-
-				hold: 1, // 도형 유지 시간(초)
-				morph: 1.5, // 변형 시간(초)
-				dragSpeed: 0.008, // 드래그 회전 감도 (클수록 조금만 끌어도 많이 돎)
-				dragInertia: 0.95, // 놓은 뒤 관성 0~1 (1에 가까울수록 오래 돎, 0 = 바로 멈춤)
-
-				// 도형
-				startShape: 0, // 처음 보이는 도형 (0 너트, 1 링, 2 큐브) — 클릭하면 다음 도형으로 변형
-				shatter: {
-					// 변형 중 조각 효과: 도형이 바뀌는 도중에 조각으로 갈라졌다가 다음 도형으로 모임 (멈춰 있을 땐 안 보임)
-					amount: 0.8, // 조각나는 정도 0~1 (0 = 조각 없이 매끄럽게, 1 = 중간에 완전히 조각 상태)
-					count: 6, // 조각 개수
-					inner: 0.45, // 중심에서 조각 안쪽 끝까지 거리 (클수록 가운데 구멍이 커짐)
-					length: 1.65, // 조각 길이 (바깥 방향)
-					width: 1.05, // 조각 폭
-					thick: 0.42, // 조각 두께
-					round: 0.1, // 모서리 둥글기 (두께의 절반보다 작게)
-					twist: 30, // 프로펠러처럼 비튼 각도(도) — 0 = 정면으로 납작, 90 = 옆면이 보임
-					skew: 24, // 중심에서 옆으로 비껴 나가는 각도(도) — 0 = 중심에서 곧게 뻗음
-				},
+				fontFamily: "Paperlogy", // 타이틀·로딩 숫자 폰트
+				// morph: 1.2, autoMorph: 3, introSpeed: 0.7, refraction: 1.4 … 바꿀 값만 적으면 됨
 			};
 		</script>
-		<script src="./js/canvas.js" defer></script>
+		<script src="./js/canvas_test.js" defer></script>
 		<script>
 			// 전역 커서 + 배경 그라데이션 설정 (빠진 값은 cursor.js 기본값 사용)
 			window.CURSOR_CONFIG = {
 				// 마우스 따라다니는 배경 그라데이션 (페이지 전체, 첫 화면 캔버스도 같은 값 사용)
-				glowColor: "rgba(255, 255, 255, 0.06)", // 그라데이션 색 (rgba로 투명도, 비우면 없음)
+				glowColor: "", // [TEST] 마우스 따라다니는 배경 빛 끔 (비우면 없음)
 				glowSize: 0.2, // 크기 (화면 대각선 대비 0~1)
 				glowEase: 0.08, // 따라가는 속도 0~1 (낮을수록 느리고 부드럽게)
 
@@ -102,12 +143,12 @@
 				ease: 1, // 따라오는 속도 0~1 (1 = 마우스와 동일, 낮을수록 늦게 따라옴)
 				linkScale: 3, // 링크·버튼 위에서 확대 배수
 				dragSize: 80, // 유리 도형 위 지름(px)
-				dragText: "DRAG | CLICK", // 유리 도형 위 글자 (비우면 글자 없음, 원 안에서 자동 줄바꿈·가운데 정렬)
+				dragText: "DRAG", // 유리 도형 위 글자 (비우면 글자 없음, 원 안에서 자동 줄바꿈·가운데 정렬)
 			};
 		</script>
 		<script src="./js/cursor.js" defer></script>
 		<script src="./js/smooth_scroll.js" defer></script>
-		<script src="./js/project_featured.js" defer></script>
+		<script src="./js/project_section_test.js" defer></script>
 		<script src="./js/custom.js" defer></script>
 	</head>
 
@@ -145,54 +186,144 @@
 
 				<div class="pro_list">
 					<div class="pro_site --01">
-						<a href="">
-							<p>리에의원</p>
+						<a href="" class="pro_card">
+							<span class="pro_img"></span>
+							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
+							<div class="pro_info">
+								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
+								<strong class="pro_tit">병원 브랜드에 맞춘 반응형 웹사이트<br />기획부터 퍼블리싱까지 구축</strong>
+								<i class="pro_line"></i>
+								<ul class="pro_desc"><li>반응형 웹 퍼블리싱</li><li>메인 비주얼 인터랙션 (GSAP)</li><li>그누보드 게시판·예약 커스터마이징</li></ul>
+							</div>
+							<ul class="pro_tag"><li>WEB PUBLISHING</li><li>RESPONSIVE</li></ul>
 						</a>
+						<p class="pro_name">리에의원</p>
 					</div>
 					<div class="pro_site --02">
-						<a href="">
-							<p class="--c-b">연세탑내과의원</p>
+						<a href="" class="pro_card">
+							<span class="pro_img"></span>
+							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
+							<div class="pro_info">
+								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
+								<strong class="pro_tit">병원 브랜드에 맞춘 반응형 웹사이트<br />기획부터 퍼블리싱까지 구축</strong>
+								<i class="pro_line"></i>
+								<ul class="pro_desc"><li>반응형 웹 퍼블리싱</li><li>메인 비주얼 인터랙션 (GSAP)</li><li>그누보드 게시판·예약 커스터마이징</li></ul>
+							</div>
+							<ul class="pro_tag"><li>WEB PUBLISHING</li><li>RESPONSIVE</li></ul>
 						</a>
+						<p class="pro_name">연세탑내과의원</p>
 					</div>
 					<div class="pro_site --03">
-						<a href="">
-							<p>프로미스비뇨의학과의원</p>
+						<a href="" class="pro_card">
+							<span class="pro_img"></span>
+							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
+							<div class="pro_info">
+								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
+								<strong class="pro_tit">병원 브랜드에 맞춘 반응형 웹사이트<br />기획부터 퍼블리싱까지 구축</strong>
+								<i class="pro_line"></i>
+								<ul class="pro_desc"><li>반응형 웹 퍼블리싱</li><li>메인 비주얼 인터랙션 (GSAP)</li><li>그누보드 게시판·예약 커스터마이징</li></ul>
+							</div>
+							<ul class="pro_tag"><li>WEB PUBLISHING</li><li>RESPONSIVE</li></ul>
 						</a>
+						<p class="pro_name">프로미스비뇨의학과의원</p>
 					</div>
 					<div class="pro_site --04">
-						<a href="">
-							<p>연세포레온안과</p>
+						<a href="" class="pro_card">
+							<span class="pro_img"></span>
+							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
+							<div class="pro_info">
+								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
+								<strong class="pro_tit">병원 브랜드에 맞춘 반응형 웹사이트<br />기획부터 퍼블리싱까지 구축</strong>
+								<i class="pro_line"></i>
+								<ul class="pro_desc"><li>반응형 웹 퍼블리싱</li><li>메인 비주얼 인터랙션 (GSAP)</li><li>그누보드 게시판·예약 커스터마이징</li></ul>
+							</div>
+							<ul class="pro_tag"><li>WEB PUBLISHING</li><li>RESPONSIVE</li></ul>
 						</a>
+						<p class="pro_name">연세포레온안과</p>
 					</div>
 					<div class="pro_site --05">
-						<a href="">
-							<p class="--c-b">드림권내과</p>
+						<a href="" class="pro_card">
+							<span class="pro_img"></span>
+							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
+							<div class="pro_info">
+								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
+								<strong class="pro_tit">병원 브랜드에 맞춘 반응형 웹사이트<br />기획부터 퍼블리싱까지 구축</strong>
+								<i class="pro_line"></i>
+								<ul class="pro_desc"><li>반응형 웹 퍼블리싱</li><li>메인 비주얼 인터랙션 (GSAP)</li><li>그누보드 게시판·예약 커스터마이징</li></ul>
+							</div>
+							<ul class="pro_tag"><li>WEB PUBLISHING</li><li>RESPONSIVE</li></ul>
 						</a>
+						<p class="pro_name">드림권내과</p>
 					</div>
 					<div class="pro_site --06">
-						<a href="">
-							<p>동탄시티병원-건강검진센터</p>
+						<a href="" class="pro_card">
+							<span class="pro_img"></span>
+							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
+							<div class="pro_info">
+								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
+								<strong class="pro_tit">병원 브랜드에 맞춘 반응형 웹사이트<br />기획부터 퍼블리싱까지 구축</strong>
+								<i class="pro_line"></i>
+								<ul class="pro_desc"><li>반응형 웹 퍼블리싱</li><li>메인 비주얼 인터랙션 (GSAP)</li><li>그누보드 게시판·예약 커스터마이징</li></ul>
+							</div>
+							<ul class="pro_tag"><li>WEB PUBLISHING</li><li>RESPONSIVE</li></ul>
 						</a>
+						<p class="pro_name">동탄시티병원-건강검진센터</p>
 					</div>
 					<div class="pro_site --07">
-						<a href="">
-							<p>완성형외과의원</p>
+						<a href="" class="pro_card">
+							<span class="pro_img"></span>
+							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
+							<div class="pro_info">
+								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
+								<strong class="pro_tit">병원 브랜드에 맞춘 반응형 웹사이트<br />기획부터 퍼블리싱까지 구축</strong>
+								<i class="pro_line"></i>
+								<ul class="pro_desc"><li>반응형 웹 퍼블리싱</li><li>메인 비주얼 인터랙션 (GSAP)</li><li>그누보드 게시판·예약 커스터마이징</li></ul>
+							</div>
+							<ul class="pro_tag"><li>WEB PUBLISHING</li><li>RESPONSIVE</li></ul>
 						</a>
+						<p class="pro_name">완성형외과의원</p>
 					</div>
 					<div class="pro_site --08">
-						<a href="">
-							<p>KITC 투데이투자방송</p>
+						<a href="" class="pro_card">
+							<span class="pro_img"></span>
+							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
+							<div class="pro_info">
+								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
+								<strong class="pro_tit">병원 브랜드에 맞춘 반응형 웹사이트<br />기획부터 퍼블리싱까지 구축</strong>
+								<i class="pro_line"></i>
+								<ul class="pro_desc"><li>반응형 웹 퍼블리싱</li><li>메인 비주얼 인터랙션 (GSAP)</li><li>그누보드 게시판·예약 커스터마이징</li></ul>
+							</div>
+							<ul class="pro_tag"><li>WEB PUBLISHING</li><li>RESPONSIVE</li></ul>
 						</a>
+						<p class="pro_name">KITC 투데이투자방송</p>
 					</div>
 					<div class="pro_site --09">
-						<a href="">
-							<p>낭만치유농업</p>
+						<a href="" class="pro_card">
+							<span class="pro_img"></span>
+							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
+							<div class="pro_info">
+								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
+								<strong class="pro_tit">병원 브랜드에 맞춘 반응형 웹사이트<br />기획부터 퍼블리싱까지 구축</strong>
+								<i class="pro_line"></i>
+								<ul class="pro_desc"><li>반응형 웹 퍼블리싱</li><li>메인 비주얼 인터랙션 (GSAP)</li><li>그누보드 게시판·예약 커스터마이징</li></ul>
+							</div>
+							<ul class="pro_tag"><li>WEB PUBLISHING</li><li>RESPONSIVE</li></ul>
 						</a>
+						<p class="pro_name">낭만치유농업</p>
 					</div>
 					<div class="pro_site --10">
-						<a href="">
-							<p>코닥미니샷</p>
+						<a href="" class="pro_card">
+							<span class="pro_img"></span>
+							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
+							<div class="pro_info">
+								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
+								<strong class="pro_tit">병원 브랜드에 맞춘 반응형 웹사이트<br />기획부터 퍼블리싱까지 구축</strong>
+								<i class="pro_line"></i>
+								<ul class="pro_desc"><li>반응형 웹 퍼블리싱</li><li>메인 비주얼 인터랙션 (GSAP)</li><li>그누보드 게시판·예약 커스터마이징</li></ul>
+							</div>
+							<ul class="pro_tag"><li>WEB PUBLISHING</li><li>RESPONSIVE</li></ul>
 						</a>
+						<p class="pro_name">코닥미니샷</p>
 					</div>
 				</div>
 			</section>
