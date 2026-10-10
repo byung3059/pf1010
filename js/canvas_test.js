@@ -1635,8 +1635,30 @@
 		visible = en.isIntersecting;
 	}).observe(wrap);
 
+	// [TEST] 인트로 동안 스크롤 잠금 (test.html의 html.intro-lock) → 인트로 끝나면 해제
+	let scrollLock = document.documentElement.classList.contains("intro-lock"),
+		lenisStopped = false;
+	window.scrollTo(0, 0);
+	function lockTick() {
+		if (!scrollLock) return;
+		if (!introStart || intro.done) {
+			scrollLock = false;
+			document.documentElement.classList.remove("intro-lock");
+			if (window.lenis) window.lenis.start();
+			if (window.ScrollTrigger) ScrollTrigger.refresh();
+			return;
+		}
+		if (window.lenis && !lenisStopped) {
+			window.lenis.stop();
+			window.lenis.scrollTo(0, { immediate: true, force: true });
+			lenisStopped = true;
+		}
+		if (window.scrollY) window.scrollTo(0, 0);
+	}
+
 	function tick() {
 		requestAnimationFrame(tick);
+		lockTick();
 		if (!visible) return;
 		if (introStart && ++frame === 3) introStart(); // [TEST]
 		const t = clock.getElapsedTime();
