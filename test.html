@@ -41,7 +41,8 @@
 			/* [TEST] 도형 캔버스는 화면에 고정, 프로젝트 섹션이 그 위로 올라옴 */
 			#project_visual { height: 200svh; } /* 1화면은 타이틀 → PROJECT 전환 구간 */
 			#project_visual .canvas_wrap { position: fixed; top: 0; left: 0; width: 100%; height: 100svh; z-index: 0; }
-			#project_site { position: relative; } /* z-index를 주면 카드 WebGL 캔버스(z-index 1)가 카드 글자를 덮으므로 주지 않음 */
+			#project_site { position: relative; overflow-x: clip; } /* 카드 이름이 옆에서 들어오는 동안 화면 밖으로 삐져나가 가로 스크롤이 생기지 않게 */
+			#header .logo h1 { white-space: nowrap; } /* 모바일에서도 2026 PORTFOLIO 한 줄 */ /* z-index를 주면 카드 WebGL 캔버스(z-index 1)가 카드 글자를 덮으므로 주지 않음 */
 			.has-proj-fx #project_site > h2 { opacity: 0; }
 			/* [TEST] 프로젝트 카드 — 8px 배수 가이드 (간격·크기·여백 모두 8의 배수) */
 			#project_site .pro_list { gap: 80px 40px; }
