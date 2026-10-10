@@ -1472,6 +1472,21 @@
 			const $ = (q) => box.querySelector(q);
 			const num = $(".i2-num"),
 				bar = $(".i2-bar i");
+			// 글자 실제 아랫선(베이스라인)이 선에서 정확히 16px 위에 오도록 줄 높이 여백만큼 내림
+			const fitBase = () => {
+				const cx = document.createElement("canvas").getContext("2d");
+				const off = (el, w, fs, lh) => {
+					cx.font = `${w} ${fs}px ${font}`;
+					const m = cx.measureText("0");
+					if (!m.fontBoundingBoxAscent) return 0;
+					return (lh - m.fontBoundingBoxAscent + m.fontBoundingBoxDescent) / 2;
+				};
+				const cfs = Math.round((fsT * 2) / 3);
+				$(".i2-count").style.marginBottom = -off(null, 900, cfs, cfs) + "px";
+				$(".i2-meta > span:last-child").style.marginBottom = -off(null, 100, 12, 16) + "px";
+			};
+			fitBase();
+			if (document.fonts) document.fonts.ready.then(fitBase);
 			const slots = [...box.querySelectorAll(".i2-d")];
 			let numStr = "000";
 			const setNum = (str) => {
