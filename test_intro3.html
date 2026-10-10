@@ -17,6 +17,14 @@
 		<style>
 			/* [TEST] 인트로 전 헤더 깜빡임 방지 (canvas_test.js가 클래스를 지우고 헤더 등장 애니메이션 시작, 4초 뒤엔 무조건 지움) */
 			html.intro-pending #header { visibility: hidden; }
+			/* [TEST] 헤더: 로고와 메뉴를 한 줄 바에 넣어 양옆 여백을 똑같이(80px / 1660px 이하 40px), 세로 가운데 정렬 */
+			@media (min-width: 1025px) {
+				#header { top: 40px; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 80px; pointer-events: none; }
+				#header .logo h1, #header #gnb { position: static; }
+				#header .logo, #header #gnb { pointer-events: auto; }
+				#header .logo h1 { white-space: nowrap; }
+			}
+			@media (min-width: 1025px) and (max-width: 1660px) { #header { padding: 0 40px; } }
 			/* [TEST] 도형 캔버스는 화면에 고정, 프로젝트 섹션이 그 위로 올라옴 */
 			#project_visual { height: 200svh; } /* 1화면은 타이틀 → PROJECT 전환 구간 */
 			#project_visual .canvas_wrap { position: fixed; top: 0; left: 0; width: 100%; height: 100svh; z-index: 0; }
