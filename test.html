@@ -82,16 +82,16 @@
 				#project_site .pro_go { top: 16px; right: 16px; width: 32px; height: 32px; }
 			}
  /* PROJECT는 캔버스가 그림 (자리·SEO는 유지) */
-			/* [TEST] 기본 스크롤바 숨김 → js/scrollbar_test.js의 커스텀 스크롤바 사용 */
-			html { scrollbar-width: none; }
-			html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; width: 0; height: 0; }
-			.c_scrollbar { z-index: 1000; position: fixed; top: 50%; right: 16px; height: calc(100vh - 24px); max-height: 160px; transform: translateY(-50%); width: 6px; border-radius: 99px; background: #e4e4ec; transition: width 0.2s, opacity 0.3s; }
-			.c_scrollbar .thumb { position: absolute; top: 0; left: 0; width: 100%; min-height: 40px; border-radius: 99px; background: #3a3a42; cursor: grab; transition: background-color 0.2s; will-change: transform; }
-			.c_scrollbar:hover, .c_scrollbar.is-drag { width: 8px; }
-			.c_scrollbar.is-drag .thumb { background: #222228; cursor: grabbing; }
-			.c_scrollbar[hidden] { display: none; }
-			@media (hover: none) { .c_scrollbar { display: none; } }
-			@media (max-width: 1024px) { .c_scrollbar { display: none; } }
+			/* [TEST] 기본 스크롤바에 디자인만 적용 (넓이 4px) */
+			html { scrollbar-width: thin; scrollbar-color: #3a3a42 #e4e4ec; }
+			::-webkit-scrollbar { width: 4px; height: 4px; }
+			::-webkit-scrollbar-track { background: #e4e4ec; }
+			::-webkit-scrollbar-thumb { background: #3a3a42; border-radius: 99px; }
+			::-webkit-scrollbar-thumb:active { background: #222228; }
+			@media (max-width: 1024px) {
+				html { scrollbar-width: none; }
+				::-webkit-scrollbar { display: none; width: 0; height: 0; }
+			}
 		</style>
 
 		<script src="https://code.jquery.com/jquery-1.12.4.min.js"></script>
@@ -194,7 +194,6 @@
 		</script>
 		<script src="./js/cursor.js" defer></script>
 		<script src="./js/smooth_scroll.js" defer></script>
-		<script src="./js/scrollbar_test.js" defer></script>
 		<script src="./js/project_section_test.js" defer></script>
 		<script src="./js/custom.js" defer></script>
 	</head>
