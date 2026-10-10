@@ -290,6 +290,7 @@
 	const linesTexU = { value: new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat) };
 	linesTexU.value.needsUpdate = true;
 	const build = { value: 1 }; // [TEST] 도형이 만들어지는 진행도 0~1 (1 = 완성)
+	const reveal = { value: 999 }; // [TEST] 칸 단위 등장 반경 (칸 수, 999 = 전부 보임)
 	const projA = { value: 1 }; // PROJECT 투명도 (사라질 때는 글자 효과로 처리하므로 1 고정)
 	// 색 + 투명도 파싱: "rgba(r,g,b,a)" / "#rrggbbaa" / 일반 색 → { color, alpha }
 	function parseRGBA(str) {
@@ -685,7 +686,7 @@
     }`;
 	const glassFS = `
     uniform sampler2D uTex; uniform vec2 uRes;
-    uniform float uPower, uChroma, uSat, uShine, uFres, uSpec, uClear, uIri, uEdge, uBlur, uIriFrom, uIriDeep, uRim, uShade, uRefl, uFringe, uLRefl, uEnv, uLine, uBuild, uFlash;
+    uniform float uPower, uChroma, uSat, uShine, uFres, uSpec, uClear, uIri, uEdge, uBlur, uIriFrom, uIriDeep, uRim, uShade, uRefl, uFringe, uLRefl, uEnv, uLine, uBuild, uFlash, uReveal, uCell;
     uniform vec3 uLight, uTint;
     varying vec3 vN; varying vec3 vEye; varying vec3 vLocal;
     vec3 sat(vec3 c, float a){ return mix(vec3(dot(c, vec3(.2125,.7154,.0721))), c, a); }
@@ -731,6 +732,13 @@
       float ang = fract(0.25 - atan(vLocal.y, vLocal.x) / 6.2831853);
       if (uBuild < 1.0 && ang > uBuild) discard;
       float cutEdge = uBuild < 1.0 ? 1.0 - smoothstep(0.0, 0.025, uBuild - ang) : 0.0; // 잘리는 끝 가까이
+      // [TEST] 칸 단위 등장: 화면을 40px 격자 칸으로 나눠 가운데 칸부터 바깥으로 (칸마다 약간 들쭉날쭉) 나타남
+      vec2 cellId = floor(gl_FragCoord.xy / uCell);
+      vec2 cellC = floor(uRes * 0.5 / uCell);
+      float cj = fract(sin(dot(cellId, vec2(12.9898, 78.233))) * 43758.5453); // 칸마다 0~1 난수
+      float cd = length(cellId - cellC) + cj * 1.5;
+      if (cd > uReveal) discard;
+      float cellEdge = 1.0 - smoothstep(0.0, 1.2, uReveal - cd); // 막 나타난 칸은 하얗게 번쩍
       vec3 n = normalize(vN);
       vec3 col = vec3(0.0);
       const int L = SAMPLES;
@@ -790,6 +798,7 @@
       col += (spec * 0.9 + fres * 0.5 * (1.0 - 0.6 * uClear)) * uSpec * mix(1.0, 0.15, bgL);
       col += cutEdge * 1.4; // [TEST] 만들어지는 끝을 하얗게 (레이저로 깎는 듯한 느낌)
       col += uFlash * (0.25 + 0.75 * pow(1.0 - abs(dot(vEye, n)), 2.0)); // [TEST] 완성 순간 테두리부터 번쩍
+      col += cellEdge * 0.9; // [TEST] 막 나타난 칸 번쩍
       gl_FragColor = vec4(col, 1.0);
     }`;
 	const makeGlass = (side, spec) =>
@@ -799,6 +808,8 @@
 				uRes: res,
 				uMorph: morph,
 				uBuild: build,
+				uReveal: reveal,
+				uCell: { value: (CFG.fx.fluteWidth || 40) * DPR },
 				uShatter: shatter,
 				uExplode: explode,
 				uTime: uTimeU,
@@ -1068,18 +1079,20 @@
 	if (FX.intro && FXON && window.gsap) {
 		// [TEST] 인트로 (새로 정리)
 		//   1) 선   : 칸막이 골 경계와 같은 자리(40px 간격)에 옅은 선이 가운데 쌍부터 양쪽 두 줄씩 그어짐
-		//   2) 도형 : 도형 좌표에 윤곽 라인을 먼저 그림 → 그 안에 유리가 차오르며 두께가 솟고 살짝 기울어 옆면 (이때부터 계속 돎)
+		//   2) 도형 : 처음부터 완성된 유리 도형이 선의 40px 칸을 따라 가운데 칸부터 바깥으로 착착 나타남 (막 나타난 칸은 번쩍, 계속 돎)
 		//   3) 멈춤 : 어긋나는 효과 없이(칸막이 0) 선 + 도형을 그대로 보여 줌 (회전은 계속)
-		//   4) 효과 : 선·윤곽이 사라지는 만큼 격자 유리 칸막이 효과가 차오름 → 평소 자세 → 타이틀 → 헤더
+		//   4) 효과 : 선이 사라지는 만큼 격자 유리 칸막이 효과가 차오름 → 평소 자세 → 타이틀 → 헤더
 		const LINE_A = 0.1; // 선 투명도 rgba(255,255,255,0.1)
 		intro.done = false;
 		intro.face = 1; // 1 = 정면 자세 고정 (rx·ry만 적용)
 		intro.rx = 0;
 		intro.ry = 0;
 		intro.s = 1;
-		intro.depth = 0.02;
+		intro.depth = 1; // 처음부터 완성된 유리 도형
+		intro.rx = 0.4;
+		intro.ry = -0.55;
 		intro.spinOn = false;
-		build.value = 0; // 유리 숨김
+		reveal.value = -2; // 칸 단위 등장 전엔 숨김
 		const hdr = document.querySelectorAll("#header .logo, #header #gnb li, #header .m_menu_btn");
 		gsap.set(hdr, { autoAlpha: 0, y: -16 });
 		document.documentElement.classList.remove("intro-pending");
@@ -1139,66 +1152,13 @@
 			oc.stroke();
 		}
 
-		// 도형 좌표 라인: 첫 도형(사각 너트)의 윤곽 — 앞면 사각·구멍 원 → 네 모서리 세로선 → 뒷면 (도형에 붙어 같이 돌고 두께도 따라감)
-		const half = 2.1 * Math.cos(Math.PI / 4),
-			zf = 0.45,
-			RH = 1.18;
-		const segs = []; // [x0,y0,z0, x1,y1,z1, 그려지는 순서 0~1]
-		const loop = (fn, n, z, t0, t1) => {
-			for (let k = 0; k < n; k++) {
-				const a = fn(k / n),
-					b = fn((k + 1) / n);
-				segs.push([a[0], a[1], z, b[0], b[1], z, t0 + ((t1 - t0) * k) / n]);
-			}
-		};
-		// 사각 둘레: 위 가운데에서 시작해 시계 방향
-		const sqPt = (u) => {
-			const p = (u * 8 + 1) % 8; // 둘레를 변 길이(=2) 단위 8로
-			if (p < 2) return [-half + p * half, half];
-			if (p < 4) return [half, half - (p - 2) * half];
-			if (p < 6) return [half - (p - 4) * half, -half];
-			return [-half, -half + (p - 6) * half];
-		};
-		const ciPt = (u) => [Math.cos(Math.PI / 2 - u * Math.PI * 2) * RH, Math.sin(Math.PI / 2 - u * Math.PI * 2) * RH];
-		loop(sqPt, 64, zf, 0.0, 0.45); // 앞면 사각
-		loop(ciPt, 96, zf, 0.25, 0.65); // 앞면 구멍
-		[[-half, -half], [half, -half], [half, half], [-half, half]].forEach(([x, y], n) => segs.push([x, y, zf, x, y, -zf, 0.62 + n * 0.03])); // 모서리 세로선
-		loop(sqPt, 64, -zf, 0.7, 1.0); // 뒷면 사각
-		loop(ciPt, 96, -zf, 0.75, 1.0); // 뒷면 구멍
-		const oPos = new Float32Array(segs.length * 6),
-			oT = new Float32Array(segs.length * 2);
-		segs.forEach((g, n) => {
-			oPos.set(g.slice(0, 6), n * 6);
-			oT[n * 2] = oT[n * 2 + 1] = g[6];
-		});
-		const oGeo = new THREE.BufferGeometry();
-		oGeo.setAttribute("position", new THREE.BufferAttribute(oPos, 3));
-		oGeo.setAttribute("aT", new THREE.BufferAttribute(oT, 1));
-		const outU = { uDraw: { value: 0 }, uA: { value: 0.8 } };
-		const outline = new THREE.LineSegments(
-			oGeo,
-			new THREE.ShaderMaterial({
-				uniforms: outU,
-				vertexShader: `attribute float aT; uniform float uDraw; varying float vOn;
-          void main(){ vOn = step(aT, uDraw); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-				fragmentShader: `uniform float uA; varying float vOn;
-          void main(){ if (vOn < 0.5) discard; gl_FragColor = vec4(vec3(1.0), uA); }`,
-				transparent: true,
-				depthTest: false,
-				depthWrite: false,
-			})
-		);
-		outline.frustumCulled = false;
-		prism.add(outline);
-
 		let introTl = null;
 		const finish = () => {
 			intro.done = true;
 			stage.last = clock.getElapsedTime();
 			gsap.ticker.remove(drawLines);
 			ov.remove();
-			prism.remove(outline);
-			oGeo.dispose();
+			reveal.value = 999;
 		};
 		// 첫 프레임(셰이더 컴파일로 멈칫함)이 지난 뒤 시작
 		introStart = () => {
@@ -1207,27 +1167,20 @@
 			introTl
 				// 1) 선: 가운데 쌍부터 두 줄씩
 				.to(L, { draw: 1, duration: 1.8, ease: "power1.inOut" }, 0.2)
-				// 2-1) 도형 좌표에 윤곽 라인을 먼저 그림 (앞면 사각 → 구멍 → 모서리 → 뒷면)
-				.to(outU.uDraw, { value: 1, duration: 1.1, ease: "power2.inOut" }, 1.8)
-				// 2-2) 라인 안에 유리 도형이 차오르며 두께가 솟고, 살짝 기울어 옆면 — 이때부터 계속 돎
-				.add(() => {
-					build.value = 1;
-					intro.spinOn = true;
-					gsap.fromTo(flash, { value: 0.5 }, { value: 0, duration: 1.2, ease: "power2.out" });
-				}, 2.85)
-				.to(intro, { depth: 1, duration: 1.4, ease: "back.out(1.4)" }, 2.85)
-				.to(intro, { rx: 0.4, ry: -0.55, duration: 1.3, ease: "power3.out" }, 2.9)
-				// 3) 멈춤: 효과 없이 그대로 보여 줌 — 도형은 계속 돎 (약 4.2 ~ 5.2초)
-				// 4) 효과: 선·윤곽 라인이 사라지는 만큼 칸막이 효과가 차오름
-				.to(L, { alpha: 0, duration: 1.0, ease: "power2.inOut" }, 5.2)
-				.to(outU.uA, { value: 0, duration: 0.8, ease: "power2.inOut" }, 5.2)
-				.to(fluteMat.uniforms.uShift, { value: fluteTarget.s, duration: 1.0, ease: "power2.inOut" }, 5.2)
-				.to(fluteMat.uniforms.uShiftT, { value: fluteTarget.t, duration: 1.0, ease: "power2.inOut" }, 5.2)
-				.to(intro, { face: 0, duration: 2.0, ease: "expo.out" }, 5.6) // 평소 자세로
+				// 2) 도형: 완성된 유리 도형이 선의 40px 칸을 따라 가운데 칸부터 바깥으로 '착착' 나타남 (막 나타난 칸은 번쩍) — 나타나면서부터 계속 돎
+				.add(() => (intro.spinOn = true), 1.9)
+				.to(reveal, { value: 16, duration: 1.1, ease: "power2.out" }, 1.9)
+				.add(() => gsap.fromTo(flash, { value: 0.4 }, { value: 0, duration: 1.0, ease: "power2.out" }), 2.7)
+				// 3) 멈춤: 효과 없이 그대로 보여 줌 — 도형은 계속 돎 (약 3.0 ~ 4.2초)
+				// 4) 효과: 선이 사라지는 만큼 칸막이 효과가 차오름
+				.to(L, { alpha: 0, duration: 1.0, ease: "power2.inOut" }, 4.2)
+				.to(fluteMat.uniforms.uShift, { value: fluteTarget.s, duration: 1.0, ease: "power2.inOut" }, 4.2)
+				.to(fluteMat.uniforms.uShiftT, { value: fluteTarget.t, duration: 1.0, ease: "power2.inOut" }, 4.2)
+				.to(intro, { face: 0, duration: 2.0, ease: "expo.out" }, 4.6) // 평소 자세로
 				.add(() => {
 					if (!titleOut) gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
-				}, 6.0) // 타이틀
-				.to(hdr, { autoAlpha: 1, y: 0, duration: 0.6, ease: "power4.out", stagger: 0.05 }, 6.3); // 헤더
+				}, 5.0) // 타이틀
+				.to(hdr, { autoAlpha: 1, y: 0, duration: 0.6, ease: "power4.out", stagger: 0.05 }, 5.3); // 헤더
 		};
 		// 인트로 중 클릭하면 끝으로 건너뜀
 		window.addEventListener("click", () => {
