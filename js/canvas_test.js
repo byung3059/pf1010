@@ -803,37 +803,39 @@
       uniform sampler2D tScene; uniform vec2 uRes; uniform float uW, uAmt, uBloom, uBloomR;
       void main(){
         vec2 p = gl_FragCoord.xy;
-        float t = fract(p.x / uW);    // 골 안에서의 위치 0~1
-        float b = t - 0.5;            // 골 가운데 0, 양끝 ±0.5
-        // 골마다 원통 렌즈처럼 옆으로 밀어 냄 → 경계에서 이미지가 계단처럼 어긋남
-        float off = b * uW * uAmt;
-        vec2 uv = vec2(p.x + off, p.y) / uRes;
+        // 세로 골 + 가로 골 (격자 유리): 골 안 위치 0~1, 가운데 0 · 양끝 ±0.5
+        float tx = fract(p.x / uW), ty = fract(p.y / uW);
+        vec2 b = vec2(tx, ty) - 0.5;
+        // 골마다 원통 렌즈처럼 밀어 냄 → 경계에서 이미지가 계단처럼 어긋남 (가로·세로 모두)
+        vec2 uv = (p + b * uW * uAmt) / uRes;
         // 골 끝으로 갈수록 살짝 색 갈라짐
-        vec2 ca = vec2(b * uW * uAmt * 0.08, 0.0) / uRes;
-        vec2 px = vec2(1.0 / uRes.x, 0.0) * 1.5; // 골 안쪽 살짝 뿌옇게 (가로 3샘플)
-        vec3 c = vec3(0.0);
+        vec2 ca = b * uW * uAmt * 0.08 / uRes;
+        vec2 px = vec2(1.0, 1.0) / uRes * 1.1; // 골 안쪽 살짝 뿌옇게 (대각 3샘플)
+        vec4 c = vec4(0.0);
         for (int i = -1; i <= 1; i++) {
           vec2 q = uv + px * float(i);
-          c += vec3(texture2D(tScene, q + ca).r, texture2D(tScene, q).g, texture2D(tScene, q - ca).b);
+          vec4 g = texture2D(tScene, q);
+          c += vec4(texture2D(tScene, q + ca).r, g.g, texture2D(tScene, q - ca).b, g.a);
         }
         c /= 3.0;
-        // 골 경계 아주 옅은 반사 (검은 배경에서는 거의 안 보임)
-        c += pow(t, 14.0) * 0.025 * uAmt;
-        // [TEST] 블룸: 주변 밝은 부분을 원형으로 모아 은은하게 번지게
+        // 블룸: 도형의 밝은 부분만 원형으로 모아 은은하게 번지게 (글자는 이 레이어에 없으므로 안 번짐)
+        vec3 bl = vec3(0.0);
         if (uBloom > 0.0) {
-          vec3 bl = vec3(0.0);
           for (int i = 0; i < 12; i++) {
             float a = float(i) * 0.5236;
             for (int j = 1; j <= 2; j++) {
               vec2 o = vec2(cos(a), sin(a)) * uBloomR * float(j) / uRes;
-              vec3 sc = texture2D(tScene, uv + o).rgb;
-              bl += max(sc - 0.55, 0.0);
+              bl += max(texture2D(tScene, uv + o).rgb - 0.55, 0.0);
             }
           }
-          c += bl / 24.0 * uBloom;
+          bl *= uBloom / 24.0;
         }
-        gl_FragColor = vec4(c, 1.0);
+        // 프리멀티플라이 출력: 도형(+번짐)만 화면 위에 얹힘, 도형 밖은 투명 → 뒤 배경·글자는 칸막이 영향 없음
+        float a = clamp(c.a + dot(bl, vec3(0.333)), 0.0, 1.0);
+        gl_FragColor = vec4(c.rgb + bl, a);
       }`,
+		transparent: true,
+		premultipliedAlpha: true,
 		depthTest: false,
 		depthWrite: false,
 	});
@@ -1189,17 +1191,25 @@
 		renderer.render(bgScene, orthoCam);
 		prism.material = backMat;
 		renderer.render(scene, camera);
-		renderer.setRenderTarget(FLUTE ? rtFinal : null); // [TEST] 칸막이가 있으면 한 번 더 거쳐서 화면에
-		renderer.clear();
-		renderer.render(bgScene, orthoCam);
 		prism.material = frontMat;
-		renderer.render(scene, camera);
-		if (projChars.some((c) => Math.abs(c.v) < 1)) renderer.render(projScene, orthoCam); // [TEST] 보이는 글자가 있을 때만
 		if (FLUTE) {
+			// [TEST] 칸막이: 도형만 투명 배경 위에 따로 그린 뒤, 배경·글자 위에 골 유리로 굴절시켜 얹음 (글자는 영향 없음)
+			renderer.setRenderTarget(rtFinal);
+			renderer.setClearAlpha(0);
+			renderer.clear();
+			renderer.render(scene, camera);
+			renderer.setClearAlpha(1);
 			renderer.setRenderTarget(null);
 			renderer.clear();
+			renderer.render(bgScene, orthoCam);
 			renderer.render(fluteScene, orthoCam);
+		} else {
+			renderer.setRenderTarget(null);
+			renderer.clear();
+			renderer.render(bgScene, orthoCam);
+			renderer.render(scene, camera);
 		}
+		if (projChars.some((c) => Math.abs(c.v) < 1)) renderer.render(projScene, orthoCam); // [TEST] 보이는 글자가 있을 때만
 	}
 	tick();
 })();

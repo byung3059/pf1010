@@ -49,7 +49,7 @@
 				chroma: 0.2, // 무지개 번짐 세기 (0 = 번짐 없음)
 				saturation: 0.35, // 채도 (0 = 흑백)
 				refraction: 1.4, // 굴절 세기
-				shine: 1.0, // 반사광(하이라이트) 세기
+				shine: 0.45, // 반사광(하이라이트) 세기
 				edgeRainbow: 0, // 모서리 무지개 세기 0~1
 				edgeDark: 0, // 모서리 어두운 테두리 0~1 (밝은 배경일 때 윤곽용)
 				blur: 0.03, // 유리 속 번짐(블러) 0 = 선명, 기본 0.1
@@ -84,7 +84,8 @@
 					480: { textY: 24 },
 				},
 
-				fx: { scrollChroma: 0, backBright: 0.5 }, // [TEST] 스크롤해도 무지개 번짐 없음 / 뒷면이 비쳐 보이게
+				fx: { scrollChroma: 0, backBright: 0.5, autoMorph: 0 }, // autoMorph 0 = 자동 변형 끔 (클릭만)
+				// [TEST] scrollChroma 0 = 스크롤해도 무지개 번짐 없음 / backBright = 뒷면이 비쳐 보이는 정도
 
 				hold: 1, // 도형 유지 시간(초)
 				morph: 1.8, // 변형 시간(초)
