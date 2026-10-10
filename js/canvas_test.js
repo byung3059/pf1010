@@ -1458,7 +1458,7 @@
 				.intro2 .i2-meta > span:last-child { opacity: 0.3; }
 				/* 퍼센트 숫자: 메인 타이틀(DETAIL ORIENTED.)과 같은 크기·굵기 */
 				.intro2 .i2-count { font-size: ${fsT}px; line-height: 1; font-weight: 100; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
-				.intro2 .i2-num { opacity: 1; color: #fff; }
+				.intro2 .i2-num { opacity: 1; color: #fff; font-weight: 900; }
 				.intro2 .i2-pct { opacity: 0.3; }
 `;
 			document.head.appendChild(css);
