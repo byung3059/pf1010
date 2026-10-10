@@ -1218,11 +1218,12 @@
 			const font = `"${CFG.fontFamily}", "Unbounded", sans-serif`;
 			const box = document.createElement("div");
 			box.className = "intro3";
-			box.innerHTML = `<div class="i3-black"></div><div class="i3-cap i3-l">Portfolio — 2026</div><div class="i3-cap i3-r">00:00:00</div>`;
+			box.innerHTML = `<canvas class="i3-hud"></canvas><div class="i3-black"></div><div class="i3-cap i3-l">Portfolio — 2026</div><div class="i3-cap i3-r">00:00:00</div>`;
 			const css = document.createElement("style");
 			css.textContent = `
 				.intro3 { position: fixed; inset: 0; z-index: 60; pointer-events: none; color: #fff; font-family: ${font}; }
 				.intro3 .i3-black { position: absolute; inset: 0; background: #000; }
+				.intro3 .i3-hud { position: absolute; inset: 0; width: 100%; height: 100%; }
 				.intro3 .i3-cap { position: absolute; bottom: 40px; font-size: 12px; line-height: 16px; letter-spacing: 0.08em; text-transform: uppercase; font-variant-numeric: tabular-nums; opacity: 0; }
 				.intro3 .i3-l { left: 40px; }
 				.intro3 .i3-r { right: 40px; }
@@ -1233,9 +1234,94 @@
 			const tc = $(".i3-r");
 			const colsMax = Math.ceil(window.innerWidth / 2 / (CFG.fx.fluteWidth || 40)) + 2;
 			const t0 = performance.now();
+			// ── 모션 그래픽 HUD: 초점 프레임(모서리 괄호) · 동심원 펄스 · 눈금자 · 실시간 수치 라벨 ──
+			const hud = $(".i3-hud"),
+				hc = hud.getContext("2d");
+			const H = { a: 0, frame: 0, rings: 0, ruler: 0, labels: 0, collapse: 0 }; // 각 요소 투명도/진행
+			const pulses = []; // 동심원 시작 시각
+			let lastPulse = 0;
+			const drawHud = (ms) => {
+				const w = window.innerWidth,
+					h = window.innerHeight,
+					d = Math.min(window.devicePixelRatio || 1, 2);
+				if (hud.width !== Math.floor(w * d)) hud.width = Math.floor(w * d);
+				if (hud.height !== Math.floor(h * d)) hud.height = Math.floor(h * d);
+				hc.setTransform(d, 0, 0, d, 0, 0);
+				hc.clearRect(0, 0, w, h);
+				if (H.a <= 0) return;
+				const ppw = h / 2 / (Math.tan((camera.fov * Math.PI) / 360) * camera.position.z);
+				const k = 1 - H.collapse; // 마지막에 가운데로 접힘
+				const cx = w / 2 + (intro.px || 0) * ppw,
+					cy = h / 2 - (intro.py || 0) * ppw;
+				hc.lineWidth = 1;
+				hc.font = '500 10px "Pretendard", monospace';
+				// 동심원 펄스 (0.45초마다 하나씩, 바깥으로 퍼지며 사라짐)
+				if (H.rings > 0) {
+					if (ms - lastPulse > 450) {
+						pulses.push(ms);
+						lastPulse = ms;
+					}
+					for (let n = pulses.length - 1; n >= 0; n--) {
+						const age = (ms - pulses[n]) / 1600;
+						if (age > 1) {
+							pulses.splice(n, 1);
+							continue;
+						}
+						const r = (40 + age * Math.max(w, h) * 0.6) * k;
+						hc.strokeStyle = `rgba(255,255,255,${0.22 * (1 - age) * H.rings * H.a})`;
+						hc.beginPath();
+						hc.arc(cx, cy, r, 0, Math.PI * 2);
+						hc.stroke();
+					}
+				}
+				// 초점 프레임: 도형 크기를 따라 줄어드는 네 모서리 괄호 + 가운데 십자
+				if (H.frame > 0) {
+					const half = Math.min(Math.max(w, h), 2.4 * (intro.s || 1) * ppw) * (0.6 + 0.4 * H.frame) * k;
+					const L = 24 * H.frame;
+					hc.strokeStyle = `rgba(255,255,255,${0.9 * H.frame * H.a})`;
+					hc.beginPath();
+					for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+						const x = cx + sx * half,
+							y = cy + sy * half;
+						hc.moveTo(x, y - sy * -L);
+						hc.lineTo(x, y);
+						hc.lineTo(x - sx * L, y);
+					}
+					hc.moveTo(cx - 8, cy);
+					hc.lineTo(cx + 8, cy);
+					hc.moveTo(cx, cy - 8);
+					hc.lineTo(cx, cy + 8);
+					hc.stroke();
+				}
+				// 눈금자 (위·아래, 도형 회전에 맞춰 흘러감)
+				if (H.ruler > 0) {
+					const off = ((intro.spinAcc || 0) * 240 + ms * 0.04) % 40;
+					hc.strokeStyle = `rgba(255,255,255,${0.32 * H.ruler * H.a})`;
+					hc.beginPath();
+					for (let x = -off; x < w; x += 8) {
+						const big = Math.round((x + off) / 8) % 5 === 0;
+						const l = (big ? 8 : 4) * H.ruler;
+						hc.moveTo(Math.round(x) + 0.5, 40);
+						hc.lineTo(Math.round(x) + 0.5, 40 + l);
+						hc.moveTo(Math.round(x) + 0.5, h - 72);
+						hc.lineTo(Math.round(x) + 0.5, h - 72 - l);
+					}
+					hc.stroke();
+				}
+				// 실시간 수치 라벨 (프레임 모서리 옆)
+				if (H.labels > 0) {
+					const deg = Math.round(((((intro.spinAcc || 0) * (CFG.fx.spin || 0.6) + intro.ry) * 180) / Math.PI) % 360 + 360) % 360;
+					const half = Math.min(Math.max(w, h), 2.4 * (intro.s || 1) * ppw) * k;
+					hc.fillStyle = `rgba(255,255,255,${0.7 * H.labels * H.a})`;
+					hc.fillText(`ROT ${String(deg).padStart(3, "0")}°`, cx + half + 8, cy - half + 8);
+					hc.fillText(`SCALE ${(intro.s || 1).toFixed(2)}×`, cx + half + 8, cy - half + 24);
+					hc.fillText(`REFR ${(fluteMat.uniforms.uShift.value / DPR).toFixed(1)}PX`, cx - half - 88, cy + half - 8);
+				}
+			};
 			const tick3 = () => {
 				const ms = performance.now() - t0;
 				tc.textContent = `00:00:${String(Math.floor(ms / 1000)).padStart(2, "0")}:${String(Math.floor((ms / 1000) * 24) % 24).padStart(2, "0")}`;
+				drawHud(ms);
 			};
 			let introTl = null;
 			const finish = () => {
@@ -1256,6 +1342,12 @@
 					// 검은 화면이 서서히 걷히며 초근접 장면 (캡션은 한 번 나타났다 한 번 사라짐 — 겹치는 트윈 없음)
 					.to($(".i3-black"), { autoAlpha: 0, duration: 1.2, ease: "power2.out" }, 0.1)
 					.to($(".i3-cap"), { autoAlpha: 0.56, duration: 0.8, ease: "power2.out", stagger: 0.1 }, 0.4)
+					// 모션 그래픽 HUD: 프레임이 '착' 잡히고 → 펄스·눈금·수치가 차례로 붙음
+					.set(H, { a: 1 }, 0.3)
+					.to(H, { frame: 1, duration: 0.6, ease: "back.out(2)" }, 0.5)
+					.to(H, { ruler: 1, duration: 0.6, ease: "power2.out" }, 0.8)
+					.to(H, { rings: 1, duration: 0.4, ease: "none" }, 1.0)
+					.to(H, { labels: 1, duration: 0.4, ease: "none" }, 1.2)
 					// 롱테이크: 천천히 돌며 뒤로 빠져나옴 (구도·크기·각도가 한 곡선으로 함께)
 					.to(intro, { s: 1, px: 0, py: 0, rx: 0.4, ry: -0.55, duration: 3.6, ease: "power2.inOut" }, 0.3)
 					// 빠져나올수록 굴절이 평소 세기로 가라앉음
@@ -1267,6 +1359,10 @@
 					.to(fluteMat.uniforms.uShiftT, { value: fluteTarget.t, duration: 1.2, ease: "power2.out" }, 3.8)
 					.to(intro, { face: 0, duration: 2.2, ease: "power2.inOut" }, 3.9)
 					.to($(".i3-cap"), { autoAlpha: 0, duration: 0.6, ease: "power2.in" }, 4.0)
+					// HUD는 도형 쪽으로 접히며 사라짐
+					.to(H, { rings: 0, labels: 0, ruler: 0, duration: 0.4, ease: "power2.in" }, 3.5)
+					.to(H, { collapse: 1, duration: 0.5, ease: "power3.in" }, 3.6)
+					.to(H, { a: 0, duration: 0.2, ease: "none" }, 4.0)
 					// 진짜 타이틀(캔버스) → 헤더
 					.add(() => {
 						if (!titleOut) gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
