@@ -46,8 +46,8 @@
 				pointColor: "#ffffff", // 포인트 점 색
 				glassColor: "#ffffff", // 유리 색 (흰색 = 무색)
 				clear: [1, 1, 1], // 도형별 투명도 0~1 (너트, 링, 큐브)
-				chroma: 0.2, // 무지개 번짐 세기 (0 = 번짐 없음)
-				saturation: 0.15, // 채도 (0 = 흑백)
+				chroma: 0.12, // 무지개 번짐 세기 (0 = 번짐 없음)
+				saturation: 0, // 채도 (0 = 흑백)
 				refraction: 1.4, // 굴절 세기
 				shine: 0.45, // 반사광(하이라이트) 세기
 				edgeRainbow: 0, // 모서리 무지개 세기 0~1
@@ -58,7 +58,7 @@
 				rimWhite: 1, // 실루엣 흰 테두리 0~1
 				bodyShade: 0, // 몸통 음영 0~1 (흰 배경에서 입체감)
 				darkReflect: 0, // 어두운 반사 띠 세기 0~1 (스튜디오 유리 느낌)
-				reflectFringe: 0.03, // 반사 띠 경계의 색 갈라짐 폭 (호박/파랑 테두리, 0 = 흑백)
+				reflectFringe: 0, // 반사 띠 경계의 색 갈라짐 폭 (호박/파랑 테두리, 0 = 흑백)
 				lightReflect: 0.2, // 밝은 반사 띠 세기 0~1 (어두운 배경에서 입체감)
 				envReflect: 0.95, // [TEST] 스튜디오 조명 반사 (모서리 흰 선 + 어두운 정면)
 				bloom: 0.9, // [TEST] 밝은 부분 빛 번짐
@@ -84,7 +84,7 @@
 					480: { textY: 24 },
 				},
 
-				fx: { scrollChroma: 0, backBright: 0.65, autoMorph: 0, ripple: 0 }, // autoMorph 0 = 자동 변형 끔 (클릭만) / ripple 0 = 클릭 물결 끔
+				fx: { scrollChroma: 0, backBright: 0.65, autoMorph: 3, ripple: 0 }, // autoMorph 3 = 3초마다 다음 도형 (사각→육각→팔각→십각, 클릭해도 넘어감) / ripple 0 = 클릭 물결 끔
 				// [TEST] scrollChroma 0 = 스크롤해도 무지개 번짐 없음 / backBright = 뒷면이 비쳐 보이는 정도
 
 				hold: 1, // 도형 유지 시간(초)

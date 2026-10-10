@@ -86,6 +86,7 @@
 			spin: 0.6, // 도형이 계속 도는 속도(라디안/초, 세로축) — 0 = 기존처럼 살짝 흔들리기만
 			flute: 8, // 유리 칸막이(가로·세로 골 유리)에서 이미지가 어긋나는 최대 거리(px) — 글자·도형 앞에 화면 전체로 깔림 (0 = 끔)
 			fluteWidth: 40, // 골 하나의 폭(px)
+			fluteText: 4, // 글자(타이틀·PROJECT)가 어긋나는 최대 거리(px) — 도형은 flute 값
 		},
 		(window.GLASS_CONFIG || {}).fx || {},
 	);
@@ -366,6 +367,12 @@
 
 	// [TEST] PROJECT 오버레이: 유리 도형 앞에 그림 (굴절 안 됨)
 	const projMat = new THREE.ShaderMaterial({
+		// [TEST] 투명 레이어에 그려도 알파가 맞게 (색은 프리멀티플라이, 알파는 그대로 누적)
+		blending: THREE.CustomBlending,
+		blendSrc: THREE.SrcAlphaFactor,
+		blendDst: THREE.OneMinusSrcAlphaFactor,
+		blendSrcAlpha: THREE.OneFactor,
+		blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
 		uniforms: { tProj: { value: projTex }, uRes: res, uProjA: projA },
 		vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
 		fragmentShader: `
@@ -388,7 +395,7 @@
 
 	/* 모든 도형을 같은 토폴로지(각도 N분할 × 단면 4변: 바깥벽/윗면/안쪽벽/아랫면)로 생성
      → 정점 수가 같아서 셰이더에서 바로 보간 가능. 속이 찬 도형은 안쪽 반지름 0 */
-	const N = 96; // 4각·6각 꼭짓점이 모두 샘플에 걸리도록 4·6의 배수
+	const N = 120; // [TEST] 4·6·8·10각 꼭짓점이 모두 샘플에 걸리도록 4·6·8·10의 공배수
 	const polyR = (n, R, corner) => (th) => {
 		// 정n각형의 각도별 반지름
 		const seg = (Math.PI * 2) / n;
@@ -502,14 +509,16 @@
 	}
 	const SQ = Math.PI / 4; // 사각형 꼭짓점 45°
 	const HX = Math.PI / 2; // 육각형 꼭짓점 90° (눕히면 위아래 뾰족)
+	// [TEST] 사각 → 육각 → 팔각 → 십각 너트 (같은 두께·구멍, 꼭짓점이 3° 샘플 간격에 맞도록 시작 각도 지정)
+	const nut = (n, corner) =>
+		buildShape(lineProf({ outB: polyR(n, 2.1, corner), outT: polyR(n, 2.1, corner), inT: () => 1.18, inB: () => 1.18, y0: -0.45, y1: 0.45 }), new THREE.Matrix4().makeRotationX(Math.PI / 2));
 	const SHAPES = [
-		// 0: 육각 너트
-		buildShape(lineProf({ outB: polyR(6, 2.1, HX), outT: polyR(6, 2.1, HX), inT: () => 1.18, inB: () => 1.18, y0: -0.45, y1: 0.45 }), new THREE.Matrix4().makeRotationX(Math.PI / 2)),
-		// 1: 둥근 유리 링 (너트와 같은 축으로 세워서 모핑이 자연스럽게)
-		buildShape(ringProf(2.0, 0.72, 1.0, 0.34, 0.22), new THREE.Matrix4().makeRotationX(Math.PI / 2), true),
-		// 2: 정육면체
-		buildShape(lineProf({ outB: polyR(4, 2.6 / Math.SQRT2, SQ), outT: polyR(4, 2.6 / Math.SQRT2, SQ), inT: zero, inB: zero, y0: -1.3, y1: 1.3 })),
+		nut(4, SQ), // 0: 사각
+		nut(6, HX), // 1: 육각
+		nut(8, 0), // 2: 팔각
+		nut(10, HX), // 3: 십각
 	];
+	const SIDES = [4, 6, 8, 10];
 	while (CFG.clear.length < SHAPES.length) CFG.clear.push(1);
 	// 변형 도중에 거쳐 가는 조각 상태 (멈춰 있을 때는 안 보임)
 	const SHATTER = buildBlades(CFG.shatter);
@@ -789,40 +798,44 @@
 	// [TEST] 유리 칸막이: 최종 장면을 한 번 더 그려서 세로 골(원통 렌즈) 모양으로 굴절
 	const FLUTE = CFG.fx.flute > 0 && CFG.fx.fluteWidth > 0;
 	const rtFinal = new THREE.WebGLRenderTarget(1, 1);
-	const rtGlow = new THREE.WebGLRenderTarget(1, 1); // 도형만 따로 (빛 번짐을 도형에만 주기 위해)
+	const rtGlow = new THREE.WebGLRenderTarget(1, 1); // 도형만 투명 배경에 (도형 레이어 + 빛 번짐 재료)
+	const rtProj = new THREE.WebGLRenderTarget(1, 1); // PROJECT 글자만 투명 배경에
+	// 레이어 3장(배경+타이틀 / 도형 / PROJECT)을 각각 다른 세기로 골 유리 굴절 후 합성
+	//   글자는 fluteText px, 도형은 flute px 만큼 어긋남
 	const fluteMat = new THREE.ShaderMaterial({
 		uniforms: {
-			tScene: { value: rtFinal.texture },
+			tBase: { value: rtFinal.texture },
 			tGlow: { value: rtGlow.texture },
+			tProj: { value: rtProj.texture },
 			uRes: res,
 			uW: { value: CFG.fx.fluteWidth * DPR },
 			uShift: { value: CFG.fx.flute * DPR },
+			uShiftT: { value: (CFG.fx.fluteText !== undefined ? CFG.fx.fluteText : CFG.fx.flute) * DPR },
 			uBloom: { value: CFG.bloom },
 			uBloomR: { value: 13 * DPR },
 		},
 		vertexShader: `void main(){ gl_Position = vec4(position.xy, 0.0, 1.0); }`,
 		fragmentShader: `
-      uniform sampler2D tScene, tGlow; uniform vec2 uRes; uniform float uW, uShift, uBloom, uBloomR;
+      uniform sampler2D tBase, tGlow, tProj; uniform vec2 uRes; uniform float uW, uShift, uShiftT, uBloom, uBloomR;
+      // 골 유리 굴절: 골마다 원통 렌즈처럼 밀어 냄 → 경계에서 계단처럼 어긋남 (골 양끝에서 최대 sh px), 대각 3샘플로 살짝 뿌옇게
+      vec4 flute(sampler2D t, vec2 p, vec2 b, float sh){
+        vec2 uv = (p + b * 2.0 * sh) / uRes;
+        vec2 px = vec2(1.0, 1.0) / uRes * 1.1;
+        return (texture2D(t, uv - px) + texture2D(t, uv) + texture2D(t, uv + px)) / 3.0;
+      }
       void main(){
         vec2 p = gl_FragCoord.xy;
-        // 세로 골 + 가로 골 (격자 유리): 골 안 위치 0~1, 가운데 0 · 양끝 ±0.5
-        float tx = fract(p.x / uW), ty = fract(p.y / uW);
-        vec2 b = vec2(tx, ty) - 0.5;
-        // 골마다 원통 렌즈처럼 밀어 냄 → 경계에서 이미지가 계단처럼 어긋남 (가로·세로 모두, 골 양끝에서 최대 uShift px)
-        vec2 uv = (p + b * 2.0 * uShift) / uRes;
-        // 골 끝으로 갈수록 살짝 색 갈라짐
-        vec2 ca = b * 2.0 * uShift * 0.08 / uRes;
-        vec2 px = vec2(1.0, 1.0) / uRes * 1.1; // 골 안쪽 살짝 뿌옇게 (대각 3샘플)
-        vec4 c = vec4(0.0);
-        for (int i = -1; i <= 1; i++) {
-          vec2 q = uv + px * float(i);
-          vec4 g = texture2D(tScene, q);
-          c += vec4(texture2D(tScene, q + ca).r, g.g, texture2D(tScene, q - ca).b, g.a);
-        }
-        c /= 3.0;
+        // 세로 골 + 가로 골 (격자 유리): 골 안 위치 0~1 → 가운데 0 · 양끝 ±0.5
+        vec2 b = vec2(fract(p.x / uW), fract(p.y / uW)) - 0.5;
+        vec4 base = flute(tBase, p, b, uShiftT); // 배경 + 타이틀
+        vec4 sh = flute(tGlow, p, b, uShift);    // 도형 (프리멀티플라이)
+        vec4 pj = flute(tProj, p, b, uShiftT);   // PROJECT (프리멀티플라이)
+        vec3 c = base.rgb * (1.0 - sh.a) + sh.rgb;
+        c = c * (1.0 - pj.a) + pj.rgb;
         // 블룸: 도형의 밝은 부분만 원형으로 모아 은은하게 번지게 (글자는 번지지 않음)
-        vec3 bl = vec3(0.0);
         if (uBloom > 0.0) {
+          vec2 uv = (p + b * 2.0 * uShift) / uRes;
+          vec3 bl = vec3(0.0);
           for (int i = 0; i < 12; i++) {
             float a = float(i) * 0.5236;
             for (int j = 1; j <= 2; j++) {
@@ -830,9 +843,9 @@
               bl += max(texture2D(tGlow, uv + o).rgb - 0.55, 0.0);
             }
           }
-          bl *= uBloom / 24.0;
+          c += bl * uBloom / 24.0;
         }
-        gl_FragColor = vec4(c.rgb + bl, 1.0);
+        gl_FragColor = vec4(c, 1.0);
       }`,
 		depthTest: false,
 		depthWrite: false,
@@ -859,6 +872,7 @@
 		rtBack.setSize(W * DPR, H * DPR);
 		rtFinal.setSize(W * DPR, H * DPR);
 		rtGlow.setSize(W * DPR, H * DPR);
+		rtProj.setSize(W * DPR, H * DPR);
 		res.value.set(W * DPR, H * DPR);
 		redrawTitle(W, H);
 		camera.aspect = W / H;
@@ -986,6 +1000,8 @@
 	const eA = new THREE.Euler(),
 		eB = new THREE.Euler();
 	let curFrom = -1; // 첫 프레임에 시작 도형 쌍을 올림
+	const kick = { from: -1, acc: 0, amt: 0, dir: 1, tiltDir: 1 }; // [TEST] 변형할 때 도는 각도
+	const AZ = new THREE.Vector3(0, 0, 1); // 너트 면의 축 (도형을 X축으로 90° 세워 만들었으므로 로컬 Z가 정면 방향)
 
 	/* ---------- [TEST] 추가 인터랙션 ---------- */
 	const FX = CFG.fx;
@@ -1132,16 +1148,27 @@
 			spin = t * 0.25 * m;
 
 		// 도형별 자세
-		const pose = [
-			[0.42 + sway * 0.12 + tilt.x, -0.35 + Math.sin(t * 0.27) * 0.25 * m + mouse.x * 0.45, -0.12 + Math.sin(t * 0.2) * 0.05 * m], // 너트
-			[0.85 + sway * 0.1 + tilt.x, -0.3 + Math.sin(t * 0.3) * 0.2 * m + mouse.x * 0.4, -0.4 + tilt.z], // 링 (사진처럼 비스듬히 누운 각도)
-			[0.55 + tilt.x, 0.6 + spin + mouse.x * 0.4, 0.12 + tilt.z], // 큐브
-		];
-		eA.set(...pose[st.from]);
-		eB.set(...pose[st.to]);
-		qA.setFromEuler(eA);
-		qB.setFromEuler(eB);
-		prism.quaternion.copy(qA).slerp(qB, u);
+		// 모든 도형 같은 자세 (너트) + 마우스 기울기
+		const pose = [0.42 + sway * 0.12 + tilt.x, -0.35 + Math.sin(t * 0.27) * 0.25 * m + mouse.x * 0.45, -0.12 + Math.sin(t * 0.2) * 0.05 * m];
+		// [TEST] 변형 모션: 자연스럽게(이징) + 인터랙티브하게
+		//   - 변형하는 동안 면 쪽 축으로 한 칸(다음 도형 꼭짓점 간격만큼) 돌며 꼭짓점이 늘어남, 방향은 마우스 좌우 쪽
+		//   - 마우스가 멀수록 크게 돌고, 중간에 마우스 위아래 쪽으로 살짝 젖혀졌다 돌아옴 + 숨 쉬듯 커졌다 돌아옴
+		if (st.from !== kick.from) {
+			kick.acc += kick.amt; // 끝난 변형만큼 누적 (자세가 튀지 않게)
+			kick.amt = 0;
+			kick.from = st.from;
+		}
+		if (u > 0 && kick.amt === 0) {
+			kick.dir = mouse.x < -0.05 ? -1 : 1;
+			kick.amt = ((Math.PI * 2) / SIDES[st.to]) * kick.dir * (1 + Math.abs(mouse.x) * 0.8);
+			kick.tiltDir = mouse.y < 0 ? -1 : 1;
+		}
+		const bump = Math.sin(u * Math.PI);
+		eA.set(pose[0] + bump * 0.35 * kick.tiltDir * m, pose[1], pose[2]);
+		prism.quaternion.setFromEuler(eA);
+		qA.setFromAxisAngle(AZ, (kick.acc + kick.amt * u) * m); // 너트 면(정면) 축으로 회전
+		prism.quaternion.multiply(qA);
+		fluteMat.uniforms.uBloom.value = CFG.bloom * (1 + bump * 0.8); // 변형 중 빛 번짐 살짝 커짐
 		// 드래그 회전 + 관성
 		if (!drag.on && (Math.abs(drag.vx) > 1e-5 || Math.abs(drag.vy) > 1e-5)) {
 			spinBy(drag.vx, drag.vy);
@@ -1180,7 +1207,7 @@
 		rip.value.z = Math.min(99, t - ripStart);
 
 		// 변형 중간에 살짝 커졌다 돌아오는 탄성 (+ 인트로 스케일)
-		prism.scale.setScalar((1 + Math.sin(u * Math.PI) * 0.06) * intro.s);
+		prism.scale.setScalar((1 + Math.sin(u * Math.PI) * 0.1) * intro.s);
 
 		renderer.setRenderTarget(rtBg);
 		renderer.clear();
@@ -1191,22 +1218,29 @@
 		prism.material = backMat;
 		renderer.render(scene, camera);
 		prism.material = frontMat;
-		// [TEST] 칸막이가 있으면 배경·글자·도형·PROJECT 전체를 한 장에 그린 뒤 골 유리로 굴절시켜 화면에
-		renderer.setRenderTarget(FLUTE ? rtFinal : null);
-		renderer.clear();
-		renderer.render(bgScene, orthoCam);
-		renderer.render(scene, camera);
-		if (projChars.some((c) => Math.abs(c.v) < 1)) renderer.render(projScene, orthoCam); // 보이는 글자가 있을 때만
+		const projOn = projChars.some((c) => Math.abs(c.v) < 1); // 보이는 PROJECT 글자가 있을 때만
 		if (FLUTE) {
-			if (CFG.bloom > 0) {
-				// 도형만 검은 배경에 한 번 더 → 번짐 재료
-				renderer.setRenderTarget(rtGlow);
-				renderer.clear();
-				renderer.render(scene, camera);
-			}
+			// [TEST] 칸막이: 배경+타이틀 / 도형 / PROJECT를 따로 그려서 각자 세기로 골 유리 굴절 후 합성
+			renderer.setRenderTarget(rtFinal);
+			renderer.clear();
+			renderer.render(bgScene, orthoCam);
+			renderer.setClearAlpha(0);
+			renderer.setRenderTarget(rtGlow);
+			renderer.clear();
+			renderer.render(scene, camera);
+			renderer.setRenderTarget(rtProj);
+			renderer.clear();
+			if (projOn) renderer.render(projScene, orthoCam);
+			renderer.setClearAlpha(1);
 			renderer.setRenderTarget(null);
 			renderer.clear();
 			renderer.render(fluteScene, orthoCam);
+		} else {
+			renderer.setRenderTarget(null);
+			renderer.clear();
+			renderer.render(bgScene, orthoCam);
+			renderer.render(scene, camera);
+			if (projOn) renderer.render(projScene, orthoCam);
 		}
 	}
 	tick();
