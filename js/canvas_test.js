@@ -283,6 +283,7 @@
 	const rip = { value: new THREE.Vector3(0, 0, 99) }; // x, y(px), 경과 시간
 	const textShift = { value: 0 };
 	const textA = { value: 1 };
+	const build = { value: 1 }; // [TEST] 도형이 만들어지는 진행도 0~1 (1 = 완성)
 	const projA = { value: 1 }; // PROJECT 투명도 (사라질 때는 글자 효과로 처리하므로 1 고정)
 	// 색 + 투명도 파싱: "rgba(r,g,b,a)" / "#rrggbbaa" / 일반 색 → { color, alpha }
 	function parseRGBA(str) {
@@ -401,7 +402,7 @@
 
 	/* 모든 도형을 같은 토폴로지(각도 N분할 × 단면 4변: 바깥벽/윗면/안쪽벽/아랫면)로 생성
      → 정점 수가 같아서 셰이더에서 바로 보간 가능. 속이 찬 도형은 안쪽 반지름 0 */
-	const N = 120; // [TEST] 4·6·8·10각 꼭짓점이 모두 샘플에 걸리도록 4·6·8·10의 공배수
+	const N = 240; // [TEST] 4·6·8·12·16·24·40각 꼭짓점이 샘플에 걸리는 수 (32각은 1.5° 차이라 눈에 안 띔)
 	const polyR = (n, R, corner) => (th) => {
 		// 정n각형의 각도별 반지름
 		const seg = (Math.PI * 2) / n;
@@ -518,13 +519,12 @@
 	// [TEST] 사각 → 육각 → 팔각 → 십각 너트 (같은 두께·구멍, 꼭짓점이 3° 샘플 간격에 맞도록 시작 각도 지정)
 	const nut = (n, corner) =>
 		buildShape(lineProf({ outB: polyR(n, 2.1, corner), outT: polyR(n, 2.1, corner), inT: () => 1.18, inB: () => 1.18, y0: -0.45, y1: 0.45 }), new THREE.Matrix4().makeRotationX(Math.PI / 2));
-	const SHAPES = [
-		nut(4, SQ), // 0: 사각
-		nut(6, HX), // 1: 육각
-		nut(8, 0), // 2: 팔각
-		nut(10, HX), // 3: 십각
-	];
-	const SIDES = [4, 6, 8, 10];
+	// [TEST] 4 → 6 → 8 → 12 → 16 → 24 → 32 → 40각 → 원 → (다시 4각) 순서로 계속 변형
+	const SIDES = [4, 6, 8, 12, 16, 24, 32, 40, 0]; // 0 = 원
+	const CORNER = { 4: SQ, 6: HX, 8: 0, 12: HX, 16: 0, 24: 0, 32: 0, 40: HX };
+	const SHAPES = SIDES.map((n) =>
+		n ? nut(n, CORNER[n]) : buildShape(lineProf({ outB: () => 2.06, outT: () => 2.06, inT: () => 1.18, inB: () => 1.18, y0: -0.45, y1: 0.45 }), new THREE.Matrix4().makeRotationX(Math.PI / 2))
+	);
 	while (CFG.clear.length < SHAPES.length) CFG.clear.push(1);
 	// 변형 도중에 거쳐 가는 조각 상태 (멈춰 있을 때는 안 보임)
 	const SHATTER = buildBlades(CFG.shatter);
@@ -647,21 +647,22 @@
 	const glassVS = `
     attribute vec3 aPosB; attribute vec3 aNormB; attribute vec3 aPosX; attribute vec3 aNormX;
     uniform float uMorph, uShatter;
-    varying vec3 vN; varying vec3 vEye;
+    varying vec3 vN; varying vec3 vEye; varying vec3 vLocal;
     void main(){
       // A → B 보간 위에, 변형 중간일수록 조각 상태(X) 쪽으로 끌려감
       vec3 p = mix(mix(position, aPosB, uMorph), aPosX, uShatter);
       vec3 n = mix(mix(normal, aNormB, uMorph), aNormX, uShatter) + 1e-5;
       vec4 wp = modelMatrix * vec4(p, 1.0);
       vN = normalize(mat3(modelMatrix) * n);
+      vLocal = p; // [TEST] 만들어지는 애니메이션용 (도형 면 = 로컬 XY 평면)
       vEye = normalize(wp.xyz - cameraPosition);
       gl_Position = projectionMatrix * viewMatrix * wp;
     }`;
 	const glassFS = `
     uniform sampler2D uTex; uniform vec2 uRes;
-    uniform float uPower, uChroma, uSat, uShine, uFres, uSpec, uClear, uIri, uEdge, uBlur, uIriFrom, uIriDeep, uRim, uShade, uRefl, uFringe, uLRefl, uEnv, uLine;
+    uniform float uPower, uChroma, uSat, uShine, uFres, uSpec, uClear, uIri, uEdge, uBlur, uIriFrom, uIriDeep, uRim, uShade, uRefl, uFringe, uLRefl, uEnv, uLine, uBuild;
     uniform vec3 uLight, uTint;
-    varying vec3 vN; varying vec3 vEye;
+    varying vec3 vN; varying vec3 vEye; varying vec3 vLocal;
     vec3 sat(vec3 c, float a){ return mix(vec3(dot(c, vec3(.2125,.7154,.0721))), c, a); }
     // 반사 방향(y)에 따른 어두운 띠 두 줄 (위쪽 굵게, 아래쪽 약하게)
     float darkBand(float y){
@@ -701,6 +702,10 @@
       return texture2D(uTex, gl_FragCoord.xy / uRes + r.xy * off * (1.0 - 0.65 * uClear)).rgb;
     }
     void main(){
+      // [TEST] 만들어지는 중: 위(12시)에서 시계 방향으로 각도가 uBuild까지인 부분만 보임
+      float ang = fract(0.25 - atan(vLocal.y, vLocal.x) / 6.2831853);
+      if (uBuild < 1.0 && ang > uBuild) discard;
+      float cutEdge = uBuild < 1.0 ? 1.0 - smoothstep(0.0, 0.025, uBuild - ang) : 0.0; // 잘리는 끝 가까이
       vec3 n = normalize(vN);
       vec3 col = vec3(0.0);
       const int L = SAMPLES;
@@ -758,6 +763,7 @@
       // 밝은 배경에서는 흰 광택 더하기를 줄여 유리 몸통이 배경색과 같게 (어두운 배경은 그대로)
       float bgL = dot(texture2D(uTex, gl_FragCoord.xy / uRes).rgb, vec3(0.3333));
       col += (spec * 0.9 + fres * 0.5 * (1.0 - 0.6 * uClear)) * uSpec * mix(1.0, 0.15, bgL);
+      col += cutEdge * 1.4; // [TEST] 만들어지는 끝을 하얗게 (레이저로 깎는 듯한 느낌)
       gl_FragColor = vec4(col, 1.0);
     }`;
 	const makeGlass = (side, spec) =>
@@ -766,6 +772,7 @@
 				uTex: { value: null },
 				uRes: res,
 				uMorph: morph,
+				uBuild: build,
 				uShatter: shatter,
 				uClear: clear,
 				uPower: { value: CFG.refraction },
@@ -1022,20 +1029,40 @@
 		CH_STAG = 1 / 30;
 	const markDirty = () => (txtDirty = true);
 	// 1) 인트로: 타이틀 글자별로 아래에서 회전하며 올라옴 + 도형 스케일/회전 등장
-	const intro = { s: 1, spin: 0 };
+	const intro = { s: 1, spin: 0, depth: 1, done: true };
 	let introStart = null,
 		frame = 0;
 	if (FX.intro && FXON && window.gsap) {
-		intro.s = 0;
-		intro.spin = -2.4;
+		// [TEST] 처음: 납작한 사각 테두리가 12시부터 시계 방향으로 그려지며 만들어짐 → 두께가 생기며 살짝 돌아 자리 잡음
+		//        → 타이틀 글자 등장 → 헤더 등장 → 그 뒤부터 자동 변형 시작
+		intro.s = 0.9;
+		intro.spin = -0.6;
+		intro.depth = 0.06;
+		intro.done = false;
+		build.value = 0;
+		const hdr = document.querySelectorAll("#header .logo, #header #gnb li, #header .m_menu_btn");
+		gsap.set(hdr, { autoAlpha: 0, y: -16 });
+		document.documentElement.classList.remove("intro-pending"); // 헤더 깜빡임 방지 클래스 (test.html head에서 붙임)
 		// 첫 프레임(셰이더 컴파일로 멈칫함)이 지난 뒤 시작 → 느린 기기에서도 앞부분이 잘리지 않음
 		introStart = () => {
-			if (!titleOut) gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, delay: 0.2, onUpdate: markDirty });
-			gsap.to(intro, { s: 1, spin: 0, duration: 2, ease: "expo.out", delay: 0.05 });
+			const tl = gsap.timeline({
+				onComplete: () => {
+					intro.done = true;
+					stage.last = clock.getElapsedTime(); // 다 만들어진 뒤부터 자동 변형 간격 계산
+				},
+			});
+			tl.to(build, { value: 1, duration: 1.6, ease: "power2.inOut" }, 0.2) // 테두리 그리기
+				.to(intro, { depth: 1, duration: 1.0, ease: "power3.out" }, 1.5) // 두께 생김
+				.to(intro, { s: 1, spin: 0, duration: 1.4, ease: "expo.out" }, 1.5) // 살짝 돌며 자리 잡음
+				.add(() => {
+					if (!titleOut) gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
+				}, 2.0) // 타이틀
+				.to(hdr, { autoAlpha: 1, y: 0, duration: 0.8, ease: "power3.out", stagger: 0.06 }, 2.5); // 헤더
 		};
 	} else {
 		titleFlat.forEach((o) => (o.v = 0));
 		drawTitle(W, H);
+		document.documentElement.classList.remove("intro-pending");
 	}
 	// 2) 렌즈: 캔버스 안에 마우스가 있을 때만 켜짐
 	const lensP = { x: glowT.x, y: glowT.y };
@@ -1136,7 +1163,7 @@
 		// [TEST] 자동 변형: 대기 시간이 지나면 다음 도형으로 (드래그 중·인트로 중엔 기다림, 클릭하면 타이머 초기화)
 		if (stage.last === undefined) stage.last = t; // 마지막 변형 시작 시점 (클릭으로 시작해도 갱신)
 		if (stage.start >= 0 && stage.start !== stage.last) stage.last = stage.start;
-		if (!reduce && FX.autoMorph > 0 && stage.start < 0 && !drag.on && intro.s > 0.99 && t - stage.last >= FX.autoMorph) stage.start = stage.last = t;
+		if (!reduce && FX.autoMorph > 0 && stage.start < 0 && !drag.on && intro.done && t - stage.last >= FX.autoMorph) stage.start = stage.last = t;
 		const st = reduce ? { from: START, to: (START + 1) % SHAPES.length, u: 0 } : stageAt(t);
 		if (st.from !== curFrom) {
 			setPair(st.from, st.to);
@@ -1166,7 +1193,7 @@
 		}
 		if (u > 0 && kick.amt === 0) {
 			kick.dir = mouse.x < -0.05 ? -1 : 1;
-			kick.amt = ((Math.PI * 2) / SIDES[st.to]) * kick.dir * (1 + Math.abs(mouse.x) * 0.8);
+			kick.amt = ((Math.PI * 2) / (SIDES[st.to] || 48)) * kick.dir * (1 + Math.abs(mouse.x) * 0.8);
 			kick.tiltDir = mouse.y < 0 ? -1 : 1;
 		}
 		const bump = Math.sin(u * Math.PI);
@@ -1214,6 +1241,7 @@
 
 		// 변형 중간에 살짝 커졌다 돌아오는 탄성 (+ 인트로 스케일)
 		prism.scale.setScalar((1 + Math.sin(u * Math.PI) * 0.1) * intro.s);
+		prism.scale.z *= intro.depth; // [TEST] 만들어질 때 두께 0 → 1
 
 		renderer.setRenderTarget(rtBg);
 		renderer.clear();

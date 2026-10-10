@@ -8,12 +8,15 @@
 		<meta name="format-detection" content="no" />
 
 		<title>2026 PORTFOLIO (TEST)</title>
+		<script>document.documentElement.classList.add("intro-pending"); setTimeout(function () { document.documentElement.classList.remove("intro-pending"); }, 4000);</script>
 		<link rel="stylesheet" href="./css/reset.min.css" />
 		<link rel="stylesheet" href="./css/fonts.css" />
 		<link rel="stylesheet" href="./css/layout.min.css" />
 		<link rel="stylesheet" href="./css/hd.min.css" />
 		<link rel="stylesheet" href="./css/style.min.css" />
 		<style>
+			/* [TEST] 인트로 전 헤더 깜빡임 방지 (canvas_test.js가 클래스를 지우고 헤더 등장 애니메이션 시작, 4초 뒤엔 무조건 지움) */
+			html.intro-pending #header { visibility: hidden; }
 			/* [TEST] 도형 캔버스는 화면에 고정, 프로젝트 섹션이 그 위로 올라옴 */
 			#project_visual { height: 200svh; } /* 1화면은 타이틀 → PROJECT 전환 구간 */
 			#project_visual .canvas_wrap { position: fixed; top: 0; left: 0; width: 100%; height: 100svh; z-index: 0; }
@@ -135,11 +138,11 @@
 					480: { textSizeM: 13 }, // 아주 작은 화면은 조금 키움
 				},
 
-				fx: { scrollChroma: 0, backBright: 0.65, autoMorph: 3, ripple: 0 }, // autoMorph 3 = 3초마다 다음 도형 (사각→육각→팔각→십각, 클릭해도 넘어감) / ripple 0 = 클릭 물결 끔
+				fx: { scrollChroma: 0, backBright: 0.65, autoMorph: 2.4, ripple: 0 }, // autoMorph 2.4 = 2.4초마다 다음 도형 (4→6→8→12→16→24→32→40각→원→반복, 클릭해도 넘어감) / ripple 0 = 클릭 물결 끔
 				// [TEST] scrollChroma 0 = 스크롤해도 무지개 번짐 없음 / backBright = 뒷면이 비쳐 보이는 정도
 
 				hold: 1, // 도형 유지 시간(초)
-				morph: 1.8, // 변형 시간(초)
+				morph: 1.6, // 변형 시간(초)
 				dragSpeed: 0.008, // 드래그 회전 감도 (클수록 조금만 끌어도 많이 돎)
 				dragInertia: 0.95, // 놓은 뒤 관성 0~1 (1에 가까울수록 오래 돎, 0 = 바로 멈춤)
 

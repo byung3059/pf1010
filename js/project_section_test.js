@@ -1,7 +1,7 @@
 /*
  * [TEST] 프로젝트 섹션 — WebGL 없이 GSAP + ScrollTrigger만 사용 (가볍게)
  * 스크롤 양에 따라(scrub, 위로 올리면 되감김) — 천천히, 부드럽게 따라옴:
- *   1) 카드가 아래에서 올라오며 살짝 기울어진 상태 → 똑바로, 가장자리가 잘린 상태(clip-path) → 전체가 펼쳐짐
+ *   1) 카드가 투명한 상태에서 아래에서 올라오며 살짝 기울어진 상태 → 똑바로, 가장자리가 잘린 상태(clip-path) → 전체가 펼쳐짐
  *   2) 카드 안 이미지는 스크롤에 따라 위아래로 천천히 움직임 (패럴랙스)
  *   3) 태그 칩·프로젝트명이 카드보다 조금 늦게 따라 들어옴
  * 호버(1024px 이상 + 마우스 기기만): 바로가기 아이콘이 마우스를 살짝 따라감
@@ -41,6 +41,7 @@
 			defaults: { ease: "none" },
 		});
 		tl.fromTo(box, { y: cfg.rise, rotation: isLeft ? -cfg.tilt : cfg.tilt }, { y: 0, rotation: 0, ease: "power1.out" }, 0)
+			.fromTo(box, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.6 }, 0) // 투명 → 보임 (등장 구간 앞 60% 동안)
 			.fromTo(a, { clipPath: "inset(12% 8% 12% 8% round 8px)" }, { clipPath: "inset(0% 0% 0% 0% round 8px)", ease: "power1.out" }, 0)
 			.fromTo(tags, { y: 16, autoAlpha: 0 }, { y: 0, autoAlpha: 1, stagger: 0.08 }, 0.4)
 			.fromTo(name, { x: 24, autoAlpha: 0 }, { x: 0, autoAlpha: 1 }, 0.5);
