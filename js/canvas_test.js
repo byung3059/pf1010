@@ -84,6 +84,8 @@
 			scrollChroma: 1.2, // 스크롤 속도만큼 무지개 번짐 증가
 			autoMorph: 3, // 자동 변형 간격(초): 변형이 시작되는 시점끼리의 간격 (0 = 끔, 클릭 변형은 그대로)
 			flow: false, // true = 멈춤 없이 계속 이어서 변형 (autoMorph 간격 무시, 변형 시간 = morph)
+			mouse: true, // false = 마우스 위치에 반응하는 효과(기울기·배경 빛·변형 방향·흩어짐) 모두 끔 — 드래그 회전은 그대로
+			clickMorph: true, // false = 도형 클릭해도 변형 안 함
 			spin: 0.6, // 도형이 계속 도는 속도(라디안/초, 세로축) — 0 = 기존처럼 살짝 흔들리기만
 			flute: 8, // 유리 칸막이(가로·세로 골 유리)에서 이미지가 어긋나는 최대 거리(px) — 글자·도형 앞에 화면 전체로 깔림 (0 = 끔)
 			fluteWidth: 40, // 골 하나의 폭(px)
@@ -923,6 +925,7 @@
 	const glowT = { x: W * 0.95, y: 0 },
 		glowP = { x: W * 0.95, y: 0 };
 	window.addEventListener("pointermove", (e) => {
+		if (CFG.fx.mouse === false) return; // [TEST] 마우스 위치 효과 끔
 		const r = wrap.getBoundingClientRect();
 		mouse.x = Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width) * 2 - 1));
 		mouse.y = Math.max(-1, Math.min(1, ((e.clientY - r.top) / r.height) * 2 - 1));
@@ -1024,6 +1027,7 @@
 	window.addEventListener("click", (e) => {
 		if (drag.moved) return (drag.moved = false); // 방금 드래그했으면 클릭 무시
 		if (isUI(e)) return;
+		if (CFG.fx.clickMorph === false) return; // [TEST] 클릭 변형 끔
 		if (stage.start >= 0 || !hitShape(e)) return; // 변형 중이거나 도형 밖이면 무시
 		stage.start = clock.getElapsedTime();
 	});
@@ -1053,95 +1057,85 @@
 		CH_STAG = 1 / 30;
 	const markDirty = () => (txtDirty = true);
 	// 1) 인트로: 타이틀 글자별로 아래에서 회전하며 올라옴 + 도형 스케일/회전 등장
-	const intro = { s: 1, spin: 0, depth: 1, done: true, shatter: 0, explode: 0, pop: 0, energy: 0 };
+	const intro = { s: 1, spin: 0, depth: 1, done: true, shatter: 0, explode: 0, pop: 0, energy: 0, face: 0, rx: 0, ry: 0 };
 	let introStart = null,
 		frame = 0;
 	if (FX.intro && FXON && window.gsap) {
-		// [TEST] 처음: 화면 곳곳에서 수많은 가는 선이 길게 늘어진 채 빨려 들어와 압축되며 사각 너트의 모서리 선이 됨
-		//        → 선이 다 모이면 그 자리에서 유리 몸체가 12시부터 휘감듯 차오르며 두께가 생김 → 번쩍 + 튕김
-		//        → 선은 사라지고 타이틀 글자 → 헤더 → 그 뒤부터 계속 변형
-		//        선들은 마우스 쪽으로 쏠리며 들어오고, 마우스를 빠르게 휘저으면 도형이 잠깐 흩어졌다 모임 (클릭하면 바로 완성)
-		intro.s = 0.88;
-		intro.spin = -1.4;
-		intro.depth = 0.06;
+		// [TEST] 처음 (정면에서 시작):
+		//   1) 채우기 — 가는 선이 한 줄씩 그려지며 면을 채움 (바깥 사각 → 안쪽 원 구멍까지 점점 모양이 바뀌는 선들)
+		//   2) 쌓기   — 같은 선 묶음이 앞쪽부터 한 겹씩 뒤로 쌓이며 도형이 살짝 기울어 층이 보임
+		//   3) 펼치기 — 옆면이 보이도록 '샥' 돌면서 층 사이가 벌어져 두께가 펼쳐지고, 그 자리에 유리 몸체가 차오름 → 번쩍
+		//   → 선 사라짐 → 타이틀 → 헤더 → 그 뒤부터 도형 변형 시작
+		intro.s = 1;
+		intro.spin = 0;
+		intro.depth = 0.02;
+		intro.face = 1; // 1 = 정면 자세 고정, 0 = 평소 자세
+		intro.rx = 0;
+		intro.ry = 0;
 		intro.done = false;
 		build.value = 0;
 		const hdr = document.querySelectorAll("#header .logo, #header #gnb li, #header .m_menu_btn");
 		gsap.set(hdr, { autoAlpha: 0, y: -16 });
 		document.documentElement.classList.remove("intro-pending"); // 헤더 깜빡임 방지 클래스 (test.html head에서 붙임)
 
-		// 선 만들기: 사각 너트(첫 도형)의 모서리 위 짧은 선분이 목표, 시작은 바깥 먼 곳에서 길게 늘어진 상태
-		const LINE_N = MOBILE ? 420 : 900;
-		const half = 2.1 * Math.cos(Math.PI / 4); // 사각형 반변 (도형 면 = 로컬 XY, 두께 = 로컬 Z ±0.45)
-		const lEnd = new Float32Array(LINE_N * 6),
-			lStart = new Float32Array(LINE_N * 6),
-			lDelay = new Float32Array(LINE_N * 2);
-		const rnd = (a, b) => a + Math.random() * (b - a);
-		for (let k = 0; k < LINE_N; k++) {
-			const z = Math.random() < 0.5 ? -0.45 : 0.45;
-			const len = rnd(0.25, 0.6);
-			let ax, ay, az, bx, by, bz;
-			const r = Math.random();
-			if (r < 0.55) {
-				// 바깥 사각 테두리 (앞·뒷면)
-				const side = (Math.random() * 4) | 0,
-					tt = rnd(-1, 1) * half;
-				const [px, py, tx, ty] = [
-					[tt, half, 1, 0],
-					[tt, -half, 1, 0],
-					[half, tt, 0, 1],
-					[-half, tt, 0, 1],
-				][side];
-				[ax, ay, az, bx, by, bz] = [px - (tx * len) / 2, py - (ty * len) / 2, z, px + (tx * len) / 2, py + (ty * len) / 2, z];
-			} else if (r < 0.85) {
-				// 안쪽 구멍 원 (앞·뒷면)
-				const th = rnd(0, Math.PI * 2),
-					rr = 1.18,
-					dth = len / rr / 2;
-				[ax, ay, az, bx, by, bz] = [Math.cos(th - dth) * rr, Math.sin(th - dth) * rr, z, Math.cos(th + dth) * rr, Math.sin(th + dth) * rr, z];
-			} else {
-				// 네 모서리 세로선 (두께 방향)
-				const cx = Math.random() < 0.5 ? -half : half,
-					cy = Math.random() < 0.5 ? -half : half;
-				[ax, ay, az, bx, by, bz] = [cx, cy, -0.45, cx, cy, 0.45];
+		// 선: 링 RINGS줄(바깥 사각 → 안쪽 원) × 층 LAYERS겹, 각 줄은 둘레 SEG분할 (도형 면 = 로컬 XY, 두께 = 로컬 Z ±0.45)
+		const RINGS = 14,
+			LAYERS = MOBILE ? 10 : 16,
+			SEG = 96;
+		const sqR = polyR(4, 2.1, SQ);
+		const nV = RINGS * LAYERS * SEG * 2;
+		const lPos = new Float32Array(nV * 3),
+			lT = new Float32Array(nV), // 둘레 위치 0~1 (그려지는 순서)
+			lRing = new Float32Array(nV), // 줄 번호 0~1 (바깥 → 안)
+			lLayer = new Float32Array(nV); // 층 0~1 (앞 → 뒤)
+		let vi = 0;
+		for (let L = 0; L < LAYERS; L++) {
+			const lz = L / (LAYERS - 1);
+			for (let R = 0; R < RINGS; R++) {
+				const f = R / (RINGS - 1);
+				for (let k = 0; k < SEG; k++) {
+					for (const kk of [k, k + 1]) {
+						const th = HX + (kk / SEG) * Math.PI * 2; // 12시에서 시작
+						const rr = sqR(th) * (1 - f) + 1.18 * f; // 사각 → 원
+						lPos[vi * 3] = Math.cos(th) * rr;
+						lPos[vi * 3 + 1] = Math.sin(th) * rr;
+						lPos[vi * 3 + 2] = 0.45 - lz * 0.9; // 앞면(+) → 뒷면(-)
+						lT[vi] = kk / SEG;
+						lRing[vi] = f;
+						lLayer[vi] = lz;
+						vi++;
+					}
+				}
 			}
-			// 시작: 무작위 방향의 먼 곳, 바깥쪽 끝이 더 멀어 길게 늘어진 선 → 들어오며 짧게 압축됨
-			let dx = rnd(-1, 1),
-				dy = rnd(-1, 1),
-				dz = rnd(-0.6, 0.6);
-			const dl = Math.hypot(dx, dy, dz) || 1;
-			dx /= dl;
-			dy /= dl;
-			dz /= dl;
-			const d0 = rnd(3, 9),
-				d1 = d0 + rnd(1.5, 6);
-			lEnd.set([ax, ay, az, bx, by, bz], k * 6);
-			lStart.set([ax + dx * d0, ay + dy * d0, az + dz * d0, bx + dx * d1, by + dy * d1, bz + dz * d1], k * 6);
-			const dly = rnd(0, 0.45);
-			lDelay[k * 2] = lDelay[k * 2 + 1] = dly;
 		}
 		const lGeo = new THREE.BufferGeometry();
-		lGeo.setAttribute("position", new THREE.BufferAttribute(lEnd, 3));
-		lGeo.setAttribute("aStart", new THREE.BufferAttribute(lStart, 3));
-		lGeo.setAttribute("aDelay", new THREE.BufferAttribute(lDelay, 1));
-		const lineU = { uP: { value: 0 }, uFade: { value: 0 }, uMouseL: mouseL };
+		lGeo.setAttribute("position", new THREE.BufferAttribute(lPos, 3));
+		lGeo.setAttribute("aT", new THREE.BufferAttribute(lT, 1));
+		lGeo.setAttribute("aRing", new THREE.BufferAttribute(lRing, 1));
+		lGeo.setAttribute("aLayer", new THREE.BufferAttribute(lLayer, 1));
+		const lineU = { uFill: { value: 0 }, uStack: { value: 0 }, uSpread: { value: 0.12 }, uFade: { value: 0 } };
 		const lines = new THREE.LineSegments(
 			lGeo,
 			new THREE.ShaderMaterial({
 				uniforms: lineU,
 				vertexShader: `
-          attribute vec3 aStart; attribute float aDelay;
-          uniform float uP, uFade; uniform vec2 uMouseL;
-          varying float vA;
+          attribute float aT, aRing, aLayer;
+          uniform float uFill, uStack, uSpread;
+          varying float vShow, vA;
           void main(){
-            float q = clamp((uP - aDelay) / 0.55, 0.0, 1.0);
-            q = 1.0 - pow(1.0 - q, 3.0);                 // 빨려 들어오다 끝에서 감속
-            vec3 pos = mix(aStart, position, q);
-            pos.xy += uMouseL * (1.0 - q) * 2.5;         // 들어오는 동안 마우스 쪽으로 쏠림
-            vA = smoothstep(0.0, 0.12, q) * (0.3 + 0.7 * q) * (1.0 - uFade);
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+            // 채우기: 바깥 줄부터 차례로, 각 줄은 12시부터 시계 방향으로 그려짐
+            float ringP = clamp(uFill * 1.7 - aRing * 0.7, 0.0, 1.0);
+            // 쌓기: 앞 층(0)은 처음부터, 뒤 층은 uStack에 따라 한 겹씩 나타남
+            float layerOn = aLayer < 0.001 ? 1.0 : step(aLayer, uStack);
+            vShow = (aT <= ringP ? 1.0 : 0.0) * layerOn;
+            vA = 0.35 + 0.65 * (1.0 - aLayer); // 앞 층이 더 밝게
+            vec3 p = position;
+            p.z = 0.45 - (0.45 - p.z) * uSpread;   // 펼치기 전엔 층 간격이 좁게 압축
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
           }`,
-				fragmentShader: `varying float vA; void main(){ gl_FragColor = vec4(vec3(1.0), vA); }`,
+				fragmentShader: `
+          uniform float uFade; varying float vShow, vA;
+          void main(){ if (vShow < 0.5) discard; gl_FragColor = vec4(vec3(1.0), vA * 0.55 * (1.0 - uFade)); }`,
 				transparent: true,
 				blending: THREE.AdditiveBlending,
 				depthTest: false,
@@ -1149,7 +1143,8 @@
 			})
 		);
 		lines.frustumCulled = false;
-		prism.add(lines); // 도형과 같이 돌고 커짐
+		prism.add(lines); // 도형과 같이 돌고 두께도 같이 (prism.scale.z는 intro.depth)
+		const spreadToDepth = () => (intro.depth = Math.max(0.02, lineU.uSpread.value)); // 층이 벌어진 만큼 유리 두께도
 
 		let introTl = null;
 		// 첫 프레임(셰이더 컴파일로 멈칫함)이 지난 뒤 시작 → 느린 기기에서도 앞부분이 잘리지 않음
@@ -1163,19 +1158,24 @@
 				},
 			});
 			introTl
-				.to(lineU.uP, { value: 1, duration: 2.1, ease: "power2.inOut" }, 0.1) // 선들이 빨려 들어와 압축
-				.to(intro, { spin: 0, s: 1, duration: 2.6, ease: "expo.out" }, 0.1)
-				.to(build, { value: 1, duration: 0.75, ease: "power2.inOut" }, 1.7) // 유리 몸체가 휘감듯 차오름
-				.to(intro, { depth: 1, duration: 0.8, ease: "power3.out" }, 1.95) // 두께 생김
+				// 1) 채우기 (정면)
+				.to(lineU.uFill, { value: 1, duration: 1.5, ease: "power1.inOut" }, 0.15)
+				// 2) 쌓기: 살짝 기울어지며 층이 앞에서 뒤로 쌓임
+				.to(intro, { rx: 0.5, ry: -0.35, duration: 1.0, ease: "power2.inOut" }, 1.45)
+				.to(lineU.uStack, { value: 1, duration: 0.9, ease: "power1.in" }, 1.55)
+				// 3) 펼치기: 옆면이 보이게 '샥' 돌며 두께가 펼쳐짐 → 유리 몸체가 차오름
+				.to(intro, { ry: -1.25, duration: 0.45, ease: "power3.in" }, 2.45)
+				.to(lineU.uSpread, { value: 1, duration: 0.55, ease: "expo.out", onUpdate: spreadToDepth }, 2.75)
+				.to(build, { value: 1, duration: 0.5, ease: "power2.out" }, 2.8)
+				.to(intro, { face: 0, duration: 1.4, ease: "expo.out" }, 2.9) // 평소 자세로 돌아옴
 				.add(() => {
-					gsap.fromTo(flash, { value: 1 }, { value: 0, duration: 1.1, ease: "power2.out" }); // 번쩍
-					gsap.fromTo(intro, { pop: 1 }, { pop: 0, duration: 1.2, ease: "elastic.out(1, 0.4)" }); // 살짝 튕김
-				}, 2.4)
-				.to(lineU.uFade, { value: 1, duration: 0.7, ease: "power2.out" }, 2.3) // 선 사라짐
+					gsap.fromTo(flash, { value: 1 }, { value: 0, duration: 1.0, ease: "power2.out" }); // 번쩍
+				}, 3.0)
+				.to(lineU.uFade, { value: 1, duration: 0.6, ease: "power2.out" }, 3.05) // 선 사라짐
 				.add(() => {
 					if (!titleOut) gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
-				}, 2.6) // 타이틀
-				.to(hdr, { autoAlpha: 1, y: 0, duration: 0.8, ease: "power3.out", stagger: 0.06 }, 3.0); // 헤더
+				}, 3.2) // 타이틀
+				.to(hdr, { autoAlpha: 1, y: 0, duration: 0.8, ease: "power3.out", stagger: 0.06 }, 3.6); // 헤더
 		};
 		// 인트로 중 클릭하면 바로 완성
 		window.addEventListener("click", () => {
@@ -1331,6 +1331,11 @@
 		const bump = Math.sin(u * Math.PI) * (FX.flow ? 0.35 : 1); // flow일 때는 단계마다 출렁임을 약하게
 		eA.set(pose[0] + bump * 0.35 * kick.tiltDir * m, pose[1], pose[2]);
 		prism.quaternion.setFromEuler(eA);
+		if (intro.face > 0) {
+			eB.set(intro.rx, intro.ry, 0);
+			qB.setFromEuler(eB);
+			prism.quaternion.slerp(qB, intro.face); // [TEST] 인트로: 정면 → 기울기 → 옆면 '샥' → 평소 자세
+		}
 		qA.setFromAxisAngle(AZ, (kick.acc + kick.amt * u) * m); // 너트 면(정면) 축으로 회전
 		prism.quaternion.multiply(qA);
 		fluteMat.uniforms.uBloom.value = CFG.bloom * (1 + bump * 0.8 + flash.value * 2.0); // 변형 중·완성 순간 빛 번짐 커짐
@@ -1348,7 +1353,9 @@
 		scr.v *= 0.92; // 스크롤 멈추면 속도 감소
 		const sp = Math.min(1, scr.p); // 첫 화면 구간(0~1)
 		// 스크롤 + 인트로 회전 (프로젝트를 내리는 동안에도 계속 천천히 돎)
-		eFx.set(sp * 0.6 + scr.p * 0.25, scr.p * Math.PI * 0.6 + intro.spin + t * FX.spin * m, intro.spin * 0.3); // + 계속 회전
+		intro.spinAcc = (intro.spinAcc || 0) + (t - (intro.lastT ?? t)) * (1 - intro.face); // 정면 고정 중엔 회전 멈춤
+		intro.lastT = t;
+		eFx.set(sp * 0.6 + scr.p * 0.25, scr.p * Math.PI * 0.6 + intro.spin + intro.spinAcc * FX.spin * m, intro.spin * 0.3); // + 계속 회전 (인트로 끝난 뒤부터)
 		qFx.setFromEuler(eFx);
 		prism.quaternion.premultiply(qFx);
 		// 마우스 방향으로 따라 움직임 + 스크롤하면 카메라 쪽으로 다가옴
