@@ -1,202 +1,159 @@
-/* canvas.js — .canvas_wrap 안에 유리 모핑 WebGL 렌더
-   필요: three.js r128 (canvas.js보다 먼저 로드)
-   설정: canvas.js보다 먼저 window.GLASS_CONFIG = { ... } 로 덮어쓰기 (빠진 값은 아래 기본값) */
+/* canvas_test.js — 첫 화면 유리 도형 비주얼 (.canvas_wrap 안에 WebGL)
+   필요: three.js r128, gsap(+CustomEase) — 이 파일보다 먼저 로드
+   설정: window.GLASS_CONFIG = { ... } 로 덮어쓰기 (빠진 값은 아래 기본값)
+
+   구성
+     1. 설정
+     2. 렌더러 · 타이틀/PROJECT 글자 캔버스
+     3. 셰이더 (배경 · 글자 오버레이 · 유리 · 격자 유리 칸막이)
+     4. 도형 (4 · 6 · 8각 너트, 같은 정점 수로 만들어 바로 보간)
+     5. 입력 (드래그 회전)
+     6. 인트로 (로딩 카운터 → 공개 → 타이틀 → 헤더)
+     7. 스크롤 (타이틀 ↔ PROJECT 전환, 인트로 중 스크롤 잠금)
+     8. 매 프레임 (변형 · 자세 · 렌더) */
 (async () => {
+	/* ───────── 1. 설정 ───────── */
 	const CFG = Object.assign(
 		{
+			// 배경
 			bgColor: "#000000", // 배경색
-			textColor: "#ffffff", // 타이틀 글자색
-			pointColor: "#9b0000", // 포인트 점 색
-			glassColor: "#ffffff", // 유리 색 (흰색 = 무색)
-			clear: [0, 1, 0], // 도형별 투명도 0~1 (너트, 링, 큐브)
-			chroma: 0.55, // 무지개 번짐 세기 (0 = 번짐 없음)
-			saturation: 1.12, // 채도 (0 = 흑백)
-			refraction: 0.32, // 굴절 세기
-			shine: 1.0, // 반사광(하이라이트) 세기
-			edgeRainbow: 0, // 모서리 무지개 세기 0~1
-			edgeDark: 0, // 모서리 어두운 테두리 0~1 (밝은 배경일 때 윤곽용)
-			blur: 0.1, // 유리 속 번짐(블러) 0 = 선명
-			rainbowFrom: 0.5, // 무지개가 시작되는 기울기 0~1 (낮을수록 면 전체로 넓게)
-			rainbowDeep: 0, // 무지개 진하기 0~1 (1 = 진한 빨강·남색까지 프리즘처럼)
-			rimWhite: 0.8, // 실루엣 흰 테두리 0~1
-			bodyShade: 0, // 몸통 음영 0~1 (흰 배경에서 입체감)
-			darkReflect: 0, // 어두운 반사 띠 세기 0~1 (스튜디오 유리 느낌)
-			reflectFringe: 0.04, // 반사 띠 경계의 색 갈라짐 폭
-			lightReflect: 0, // 밝은 반사 띠 세기 0~1 (어두운 배경에서 입체감)
-			envReflect: 0, // [TEST] 스튜디오 조명 반사 0~2: 위·옆 조명판이 비쳐 모서리엔 가는 흰 선, 정면은 어둡게 (어두운 유리 느낌)
-			bloom: 0, // [TEST] 밝은 부분 주변 은은한 빛 번짐 0~1
-			edgeLine: 0, // [TEST] 각진 모서리마다 가는 흰 하이라이트 선 0~2
-			dragSpeed: 0.008, // 드래그 회전 감도 (px당 라디안)
-			dragInertia: 0.95, // 놓은 뒤 관성 0~1 (1에 가까울수록 오래 돎)
-			bgColor2: "", // 배경 그라데이션 두 번째 색 (마우스를 따라다님). 비우면 단색
-			bgGlowSize: 0.55, // 그라데이션 크기 (화면 대각선 대비 0~1)
-			bgGlowEase: 0.08, // 마우스 따라가는 속도 0~1 (낮을수록 느리고 부드럽게)
-			fontFamily: "Unbounded", // 타이틀 폰트 (페이지에 로드된 폰트)
-			textWeight: 900, // 타이틀 굵기
-			textSize: 120, // 타이틀 크기(px) — 화면 1024px 초과
-			textSizeM: 11.5, // 타이틀 크기(vw) — 화면 1024px 이하
-			lineHeight: 1, // 줄 간격 (글자 크기 배수)
-			textAlign: "center", // 가로 정렬: "left" | "center" | "right"
-			textVAlign: "center", // 세로 정렬: "top" | "center" | "bottom"
-			textX: 0, // 가로 여백(px): left면 왼쪽에서, right면 오른쪽에서, center면 가운데에서 이동(+오른쪽)
-			textY: 0, // 세로 여백(px): top이면 위에서, bottom이면 아래에서, center면 가운데에서 이동(+아래)
-			morph: 1.6, // 변형 시간(초)
-			startShape: 0, // 처음 보이는 도형 (0 너트, 1 링, 2 큐브)
+			bgColor2: "rgba(255, 255, 255, 0.06)", // 오른쪽 위 은은한 빛 (비우면 단색)
+			bgGlowSize: 0.2, // 빛 크기 (화면 대각선 대비 0~1)
+			// 유리
+			refraction: 1.4, // 굴절 세기
+			chroma: 0.12, // 무지개 번짐
+			saturation: 0, // 채도 (0 = 흑백)
+			blur: 0.03, // 유리 속 번짐
+			clear: 1, // 투명도 0~1
+			shine: 0.45, // 하이라이트 세기
+			backBright: 0.65, // 뒷면 밝기 (높을수록 속이 비쳐 보임)
+			rimWhite: 1, // 실루엣 흰 테두리
+			lightReflect: 0.2, // 밝은 반사 띠
+			envReflect: 0.95, // 스튜디오 조명 반사 (모서리 흰 선 + 어두운 정면)
+			edgeLine: 0.8, // 모서리·옆면 흰 하이라이트
+			bloom: 0.9, // 밝은 부분 빛 번짐
+			// 격자 유리 칸막이 (화면 전체)
+			flute: 8, // 도형이 어긋나는 최대 거리(px)
+			fluteText: 4, // 글자가 어긋나는 최대 거리(px)
+			fluteWidth: 40, // 칸 하나 폭(px)
+			// 타이틀 글자
+			textColor: "#ffffff",
+			pointColor: "#ffffff", // 마지막 "." 색
+			fontFamily: "Paperlogy",
+			textWeight: 900,
+			textSize: 120, // px — 화면 1024px 초과
+			textSizeM: 11.7, // vw — 화면 1024px 이하
+			lineHeight: 1,
+			responsive: { 480: { textSizeM: 13 } }, // 화면 너비가 키 값 이하일 때 textSizeM 덮어쓰기
+			// 움직임
+			morph: 1.2, // 변형 시간(초)
+			autoMorph: 3, // 자동 변형 간격(초)
+			spin: 0.6, // 계속 도는 속도(라디안/초)
+			dragSpeed: 0.008, // 드래그 회전 감도
+			dragInertia: 0.95, // 놓은 뒤 관성 0~1
+			introSpeed: 0.7, // 인트로 속도 (1 = 기본, 낮을수록 느림)
 			mobileDpr: 1.5, // 모바일 최대 해상도 배율 (PC는 2)
-			mobileSamples: 8, // 모바일 유리 셰이더 샘플 수 (PC는 16, 낮을수록 가볍고 번짐이 거칠어짐)
+			mobileSamples: 8, // 모바일 유리 셰이더 샘플 수 (PC는 16)
 		},
 		window.GLASS_CONFIG || {},
-	);
-	// 배경 그라데이션은 전역 설정(CURSOR_CONFIG.glow*)을 따름 — GLASS_CONFIG에 직접 적으면 그 값 우선
-	const CC = window.CURSOR_CONFIG || {},
-		GC = window.GLASS_CONFIG || {};
-	if (GC.bgColor2 === undefined && CC.glowColor !== undefined) CFG.bgColor2 = CC.glowColor;
-	if (GC.bgGlowSize === undefined && CC.glowSize !== undefined) CFG.bgGlowSize = CC.glowSize;
-	if (GC.bgGlowEase === undefined && CC.glowEase !== undefined) CFG.bgGlowEase = CC.glowEase;
-	["bgColor", "bgColor2", "textColor", "pointColor", "glassColor"].forEach((k) => (CFG[k] = String(CFG[k]).trim()));
-	if (!Array.isArray(CFG.clear) || CFG.clear.length < 3) CFG.clear = [0, 1, 0];
-	// 변형 중 조각 효과: 도형이 바뀌는 도중에 둘레가 조각(블록)으로 갈라졌다가 다음 도형으로 모임
-	// (GLASS_CONFIG.shatter 로 일부만 덮어써도 됨)
-	CFG.shatter = Object.assign(
-		{
-			amount: 0.8, // 조각나는 정도 0~1 (0 = 조각 없이 매끄럽게, 1 = 중간에 완전히 조각 상태)
-			count: 6, // 조각 개수
-			inner: 0.45, // 중심에서 조각 안쪽 끝까지 거리
-			length: 1.65, // 조각 길이 (바깥 방향)
-			width: 1.05, // 조각 폭
-			thick: 0.42, // 조각 두께
-			round: 0.14, // 모서리 둥글기
-			twist: 30, // 프로펠러처럼 비튼 각도(도)
-			skew: 24, // 중심에서 옆으로 비껴 나가는 각도(도)
-		},
-		(window.GLASS_CONFIG || {}).shatter || {},
-	);
-	const MORPH = CFG.morph;
-	// [TEST] 추가 인터랙션 (GLASS_CONFIG.fx 로 덮어쓰기)
-	CFG.fx = Object.assign(
-		{
-			intro: true, // 첫 진입: 타이틀 줄별로 올라옴 + 도형 회전하며 등장
-			lens: 0.35, // 마우스 주변 타이틀 렌즈 왜곡 세기 0~1 (0 = 끔, 모바일은 자동으로 끔)
-			lensSize: 220, // 렌즈 반경(px)
-			ripple: 1, // 클릭 시 퍼지는 파동 세기 (0 = 끔)
-			parallax: 0.35, // 마우스 방향으로 도형이 따라 움직이는 거리
-			scroll: true, // 스크롤하면 도형 회전·확대 + 타이틀 위로 사라짐 (#project_visual 높이 필요)
-			scrollChroma: 1.2, // 스크롤 속도만큼 무지개 번짐 증가
-			autoMorph: 3, // 자동 변형 간격(초): 변형이 시작되는 시점끼리의 간격 (0 = 끔, 클릭 변형은 그대로)
-			flow: false, // true = 멈춤 없이 계속 이어서 변형 (autoMorph 간격 무시, 변형 시간 = morph)
-			mouse: true, // false = 마우스 위치에 반응하는 효과(기울기·배경 빛·변형 방향·흩어짐) 모두 끔 — 드래그 회전은 그대로
-			clickMorph: true, // false = 도형 클릭해도 변형 안 함
-			spin: 0.6, // 도형이 계속 도는 속도(라디안/초, 세로축) — 0 = 기존처럼 살짝 흔들리기만
-			flute: 8, // 유리 칸막이(가로·세로 골 유리)에서 이미지가 어긋나는 최대 거리(px) — 글자·도형 앞에 화면 전체로 깔림 (0 = 끔)
-			fluteWidth: 40, // 골 하나의 폭(px)
-			fluteText: 4, // 글자(타이틀·PROJECT)가 어긋나는 최대 거리(px) — 도형은 flute 값
-		},
-		(window.GLASS_CONFIG || {}).fx || {},
 	);
 
 	const wrap = document.querySelector(".canvas_wrap");
 	if (!wrap) return;
+	const root = document.documentElement;
+	const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+	const MOBILE = matchMedia("(hover: none) and (pointer: coarse)").matches;
+	const SAMPLES = Math.max(1, Math.round(MOBILE ? CFG.mobileSamples : 16));
+	const DPR = Math.min(window.devicePixelRatio || 1, MOBILE ? CFG.mobileDpr : 2);
+	const HAS_GSAP = !!window.gsap;
+
+	/* ───────── 2. 렌더러 · 글자 캔버스 ───────── */
 	if (getComputedStyle(wrap).position === "static") wrap.style.position = "relative";
 	const canvas = document.createElement("canvas");
 	canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;";
 	wrap.appendChild(canvas);
-
-	// 모바일(마우스 없는 터치 기기)은 GPU 부담을 줄임: 해상도 배율·유리 셰이더 샘플 수·안티앨리어싱
-	const MOBILE = matchMedia("(hover: none) and (pointer: coarse)").matches;
-	const SAMPLES = Math.max(1, Math.round(MOBILE ? CFG.mobileSamples : 16));
-
-	// WebGL을 못 쓰면 DOM 타이틀을 대신 보여줌 (흰 화면 방지)
 	let renderer;
 	try {
 		if (!window.THREE) throw new Error("three.js not loaded");
 		renderer = new THREE.WebGLRenderer({ canvas, antialias: !MOBILE });
 	} catch (e) {
+		// WebGL을 못 쓰면 DOM 타이틀을 그대로 보여줌
 		canvas.remove();
 		(wrap.closest("#project_visual") || document.body).classList.add("is-no-webgl");
+		root.classList.remove("intro-pending", "intro-lock");
 		return;
 	}
-	const DPR = Math.min(window.devicePixelRatio || 1, MOBILE ? CFG.mobileDpr : 2);
 	renderer.setPixelRatio(DPR);
 	renderer.setClearColor(new THREE.Color(CFG.bgColor), 1);
 	renderer.autoClear = false;
 
-	/* ---------- 타이틀 텍스처: .slg .tit h2 문구를 캔버스에 그려 유리 뒤 배경으로 사용 ---------- */
+	// 타이틀 문구: .slg .tit h2 (<br>로 줄 나눔, .point는 마지막 줄 끝 점) — DOM 글자는 숨기고 캔버스로 그림
 	const titleEl = document.querySelector(".slg .tit h2");
-	const lines = [""]; // <br> 기준 줄 나눔
-	let pointText = "";
+	let lines = ["DETAIL", "ORIENTED"],
+		pointText = ".";
 	if (titleEl) {
+		lines = [""];
+		pointText = "";
 		titleEl.childNodes.forEach((nd) => {
 			if (nd.nodeName === "BR") lines.push("");
 			else if (nd.classList && nd.classList.contains("point")) pointText = nd.textContent.trim();
 			else lines[lines.length - 1] += nd.textContent;
 		});
-		for (let i = 0; i < lines.length; i++) lines[i] = lines[i].trim().toUpperCase();
-		// 마지막 줄 끝의 "."은 빨간 포인트 점으로 대체 (visual_cube.js와 동일 처리)
+		lines = lines.map((l) => l.trim().toUpperCase());
 		if (pointText) lines[lines.length - 1] = lines[lines.length - 1].replace(/\.$/, "");
-		titleEl.style.opacity = 0; // DOM 타이틀은 숨김 (마크업/SEO 유지)
-	} else {
-		lines[0] = "DETAIL";
-		lines.push("ORIENTED");
-		pointText = ".";
+		titleEl.style.opacity = 0;
 	}
+	const projEl = document.querySelector("#project_site > h2");
+	const projText = projEl ? projEl.textContent.trim().toUpperCase() : "PROJECT";
 	try {
 		await document.fonts.load(`${CFG.textWeight} 120px "${CFG.fontFamily}"`);
 	} catch (e) {}
 
-	const tc = document.createElement("canvas");
-	const tctx = tc.getContext("2d");
-	const textTex = new THREE.CanvasTexture(tc);
-	textTex.minFilter = THREE.LinearFilter;
-	textTex.generateMipmaps = false;
-	// [TEST] 프로젝트 섹션 타이틀: 스크롤하면 도형 앞에서 아래 → 위로 빨려 올라오며 등장
-	const projEl = document.querySelector("#project_site > h2");
-	const projText = projEl ? projEl.textContent.trim().toUpperCase() : "PROJECT";
-	const pc = document.createElement("canvas");
-	const pctx = pc.getContext("2d");
-	const projTex = new THREE.CanvasTexture(pc);
-	projTex.minFilter = THREE.LinearFilter;
-	projTex.generateMipmaps = false;
-
-	/* 반응형: GLASS_CONFIG.responsive = { 1440: {...}, 768: {...} }
-	   CSS의 max-width 미디어 쿼리처럼 화면 너비가 그 값 이하일 때 덮어씀 (작은 쪽이 우선)
-	   breakpoint에 textSize(px)를 적으면 1024px 이하의 textSizeM(vw) 규칙보다 우선 */
-	const RESP_KEYS = ["textColor", "pointColor", "fontFamily", "textWeight", "textSize", "textSizeM", "lineHeight", "textAlign", "textVAlign", "textX", "textY"];
-	const BASE = {};
-	RESP_KEYS.forEach((k) => (BASE[k] = CFG[k]));
-	const RESP = CFG.responsive || {};
-	const BPS = Object.keys(RESP)
-		.map(Number)
-		.filter((n) => !isNaN(n))
-		.sort((a, b) => b - a); // 큰 값부터 적용 → 작은 값이 마지막에 덮어씀
-	let sizePx = false; // true면 화면 크기와 상관없이 textSize(px) 사용
-	function applyResponsive() {
-		const vw = window.innerWidth;
-		Object.assign(CFG, BASE);
-		sizePx = false;
-		BPS.forEach((bp) => {
-			if (vw > bp) return;
-			const o = RESP[bp] || {};
-			RESP_KEYS.forEach((k) => o[k] !== undefined && (CFG[k] = typeof o[k] === "string" ? o[k].trim() : o[k]));
-			if (o.textSizeM !== undefined) sizePx = false;
-			if (o.textSize !== undefined) sizePx = true;
-		});
-	}
-	function redrawTitle(W, H) {
-		applyResponsive();
-		drawTitle(W, H);
-		drawProj(W, H);
-		// breakpoint에서 폰트/굵기를 바꿨는데 아직 안 불러왔으면 불러온 뒤 다시 그림
-		const fk = `${CFG.textWeight} 120px "${CFG.fontFamily}"`;
-		if (!document.fonts.check(fk)) document.fonts.load(fk).then(() => drawTitle(W, H), () => {});
+	// 글자 크기: 1024px 초과 = textSize(px), 이하 = textSizeM(vw, responsive로 덮어쓰기)
+	function fontSize(W) {
+		if (W > 1024) return CFG.textSize;
+		let m = CFG.textSizeM;
+		Object.keys(CFG.responsive || {})
+			.map(Number)
+			.sort((a, b) => b - a)
+			.forEach((bp) => {
+				if (W <= bp && CFG.responsive[bp].textSizeM) m = CFG.responsive[bp].textSizeM;
+			});
+		return (W * m) / 100;
 	}
 
-	// [TEST] 글자별 애니메이션 — 기존 PROJECT 타이틀(project_featured.js)과 같은 방식
-	//   v: -1 = 아래 마스크 밖(+10°) / 0 = 제자리 / 1 = 위 마스크 밖(-10°)  (yPercent ±100 + rotation ±10°)
-	const titleChars = lines.map((ln, i) => Array.from(ln + (i === lines.length - 1 ? pointText : "")).map(() => ({ v: CFG.fx.intro ? -1 : 0 })));
+	function makeTextCanvas() {
+		const c = document.createElement("canvas");
+		const tex = new THREE.CanvasTexture(c);
+		tex.minFilter = THREE.LinearFilter;
+		tex.generateMipmaps = false;
+		return { c, ctx: c.getContext("2d"), tex };
+	}
+	const titleCv = makeTextCanvas(),
+		projCv = makeTextCanvas();
+
+	// 글자별 상태 v: -1 = 아래로 숨음 / 0 = 제자리 / 1 = 위로 숨음 (마스크 안에서 이동 + 10° 회전)
+	const PLAY_INTRO = HAS_GSAP && !reduce;
+	const titleChars = lines.map((ln, i) => Array.from(ln + (i === lines.length - 1 ? pointText : "")).map(() => ({ v: PLAY_INTRO ? -1 : 0 })));
 	const titleFlat = titleChars.flat();
 	const projChars = Array.from(projText).map(() => ({ v: -1 }));
-	let txtDirty = false; // 트윈 중이면 다음 프레임에 다시 그림
-	// 한 줄을 글자별로: 줄마다 마스크(clip) 안에서 글자가 위·아래로 이동 + 회전
+	let txtDirty = false;
+	const markDirty = () => (txtDirty = true);
+
+	function prepCanvas({ c, ctx }, W, H) {
+		const nw = Math.max(2, Math.floor(W * DPR)),
+			nh = Math.max(2, Math.floor(H * DPR));
+		if (c.width !== nw) c.width = nw;
+		if (c.height !== nh) c.height = nh;
+		ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+		ctx.clearRect(0, 0, W, H);
+		const fs = fontSize(W);
+		ctx.font = `${CFG.textWeight} ${fs}px ${CFG.fontFamily}, "Arial Black", sans-serif`;
+		ctx.textAlign = "left";
+		ctx.textBaseline = "alphabetic";
+		return { fs, lh: fs * CFG.lineHeight, capH: ctx.measureText("H").actualBoundingBoxAscent || fs * 0.72 };
+	}
+	// 한 줄을 글자별로 그림: 줄 마스크 안에서 글자가 위·아래로 이동 + 회전
 	function drawCharsLine(ctx, str, x, y, states, colorAt, capH, fs, lh, W) {
 		ctx.save();
 		ctx.beginPath();
@@ -204,518 +161,119 @@
 		ctx.clip();
 		for (let k = 0; k < str.length; k++) {
 			const v = states[k].v;
-			const ch = str[k];
-			if (Math.abs(v) >= 1 || ch === " ") continue;
+			if (Math.abs(v) >= 1 || str[k] === " ") continue;
 			const cx = x + ctx.measureText(str.slice(0, k)).width;
-			const cw = ctx.measureText(ch).width;
+			const cw = ctx.measureText(str[k]).width;
 			ctx.save();
-			// 글자 가운데 기준 회전 (CSS transform-origin: center와 동일)
 			ctx.translate(cx + cw / 2, y - capH / 2 - v * lh * 1.1);
 			ctx.rotate((-v * 10 * Math.PI) / 180);
 			ctx.fillStyle = colorAt(k);
-			ctx.fillText(ch, -cw / 2, capH / 2);
+			ctx.fillText(str[k], -cw / 2, capH / 2);
 			ctx.restore();
 		}
 		ctx.restore();
 	}
 	function drawTitle(W, H) {
-		const nw = Math.max(2, Math.floor(W * DPR)),
-			nh = Math.max(2, Math.floor(H * DPR));
-		if (tc.width !== nw) tc.width = nw; // 크기가 같으면 재할당 안 함 (애니메이션 중 매 프레임 다시 그리므로)
-		if (tc.height !== nh) tc.height = nh;
-		tctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-		// 배경색·그라데이션은 셰이더에서 칠함 (마우스 추적) → 여기선 글자만 투명 캔버스에
-		tctx.clearRect(0, 0, W, H);
-		// 크기: 화면 1024px 초과면 textSize(px), 이하면 textSizeM(vw) — responsive에서 textSize를 적은 구간은 textSize(px)
-		const fs = !sizePx && W <= 1024 ? (W * CFG.textSizeM) / 100 : CFG.textSize;
-		const lh = fs * CFG.lineHeight;
-		tctx.font = `${CFG.textWeight} ${fs}px ${CFG.fontFamily}, "Arial Black", sans-serif`;
-		tctx.textAlign = "left";
-		tctx.textBaseline = "alphabetic";
-		// 대문자 높이(글자 윗선~기준선)로 실제 보이는 글자 끝에 맞춰 정렬
-		const capH = tctx.measureText("H").actualBoundingBoxAscent || fs * 0.72;
+		const { ctx } = titleCv;
+		const { fs, lh, capH } = prepCanvas(titleCv, W, H);
 		const n = lines.length;
-		// 첫 줄 기준선 위치: top = 위에서 textY / bottom = 아래에서 textY / center = 가운데 + textY
-		const firstBase =
-			CFG.textVAlign === "top" ? CFG.textY + capH : CFG.textVAlign === "bottom" ? H - CFG.textY - lh * (n - 1) : H / 2 - (capH + lh * (n - 1)) / 2 + capH + CFG.textY;
+		const base = H / 2 - (capH + lh * (n - 1)) / 2 + capH; // 첫 줄 기준선 (세로 가운데)
 		lines.forEach((ln, i) => {
-			const isLast = i === n - 1;
-			const m1 = tctx.measureText(ln);
-			const w1 = m1.width;
-			const w2 = isLast && pointText ? tctx.measureText(pointText).width : 0;
-			const w = w1 + w2;
-			// 가로: left = 왼쪽에서 textX / right = 오른쪽에서 textX / center = 가운데 + textX
-			const x =
-				CFG.textAlign === "left"
-					? CFG.textX + (m1.actualBoundingBoxLeft || 0) // 글자 좌측 여백 보정 → 잉크가 정확히 textX에서 시작
-					: CFG.textAlign === "right"
-						? W - w - CFG.textX
-						: W / 2 - w / 2 + CFG.textX;
-			const y = firstBase + lh * i;
-			const str = ln + (isLast ? pointText : "");
-			// 마지막 줄 끝 포인트(.)는 pointColor
-			drawCharsLine(tctx, str, x, y, titleChars[i], (k) => (k >= ln.length ? CFG.pointColor : CFG.textColor), capH, fs, lh, W);
+			const str = ln + (i === n - 1 ? pointText : "");
+			const x = W / 2 - ctx.measureText(str).width / 2;
+			drawCharsLine(ctx, str, x, base + lh * i, titleChars[i], (k) => (k >= ln.length ? CFG.pointColor : CFG.textColor), capH, fs, lh, W);
 		});
-		textTex.needsUpdate = true;
+		titleCv.tex.needsUpdate = true;
 	}
-
-	// [TEST] PROJECT 글자: 타이틀과 같은 폰트·크기로 화면 가운데, 글자별로 아래에서 회전하며 올라옴
 	function drawProj(W, H) {
-		const nw = Math.max(2, Math.floor(W * DPR)),
-			nh = Math.max(2, Math.floor(H * DPR));
-		if (pc.width !== nw) pc.width = nw;
-		if (pc.height !== nh) pc.height = nh;
-		pctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-		pctx.clearRect(0, 0, W, H);
-		const fs = !sizePx && W <= 1024 ? (W * CFG.textSizeM) / 100 : CFG.textSize;
-		pctx.font = `${CFG.textWeight} ${fs}px ${CFG.fontFamily}, "Arial Black", sans-serif`;
-		pctx.textAlign = "left";
-		pctx.textBaseline = "alphabetic";
-		const capH = pctx.measureText("H").actualBoundingBoxAscent || fs * 0.72;
-		const w = pctx.measureText(projText).width;
-		drawCharsLine(pctx, projText, W / 2 - w / 2, H / 2 + capH / 2, projChars, () => CFG.textColor, capH, fs, fs * CFG.lineHeight, W);
-		projTex.needsUpdate = true;
+		const { ctx } = projCv;
+		const { fs, lh, capH } = prepCanvas(projCv, W, H);
+		const x = W / 2 - ctx.measureText(projText).width / 2;
+		drawCharsLine(ctx, projText, x, H / 2 + capH / 2, projChars, () => CFG.textColor, capH, fs, lh, W);
+		projCv.tex.needsUpdate = true;
 	}
 
-	/* ---------- 배경(텍스트) 패스 ---------- */
+	/* ───────── 3. 셰이더 ───────── */
 	const res = { value: new THREE.Vector2(1, 1) };
-	const glow = { value: new THREE.Vector2(0, 0) }; // 그라데이션 중심(px, 캔버스 좌표 · 아래가 0)
-	// [TEST] 셰이더 공용 값
-	const lensPos = { value: new THREE.Vector2(-9999, -9999) };
-	const lensAmt = { value: 0 };
-	const rip = { value: new THREE.Vector3(0, 0, 99) }; // x, y(px), 경과 시간
-	const textShift = { value: 0 };
-	const textA = { value: 1 };
-	// [TEST] 인트로 선 텍스처 (처음엔 빈 1px — 인트로가 2D 캔버스로 바꿔 끼움)
-	const linesTexU = { value: new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat) };
-	linesTexU.value.needsUpdate = true;
-	const build = { value: 1 }; // [TEST] 도형이 만들어지는 진행도 0~1 (1 = 완성)
-	const reveal = { value: 999 }; // [TEST] 칸 단위 등장 반경 (칸 수, 999 = 전부 보임)
-	const projA = { value: 1 }; // PROJECT 투명도 (사라질 때는 글자 효과로 처리하므로 1 고정)
-	// 색 + 투명도 파싱: "rgba(r,g,b,a)" / "#rrggbbaa" / 일반 색 → { color, alpha }
-	function parseRGBA(str) {
-		const s = String(str || "").trim();
-		let m = s.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+%?)\s*)?\)$/i);
-		if (m) {
-			let a = m[4] === undefined ? 1 : m[4].endsWith("%") ? parseFloat(m[4]) / 100 : parseFloat(m[4]);
-			return { color: new THREE.Color(m[1] / 255, m[2] / 255, m[3] / 255), alpha: a };
-		}
-		m = s.match(/^#([0-9a-f]{6})([0-9a-f]{2})$/i);
-		if (m) return { color: new THREE.Color("#" + m[1]), alpha: parseInt(m[2], 16) / 255 };
-		return { color: new THREE.Color(s || "#000"), alpha: 1 };
-	}
-	const bg2 = parseRGBA(CFG.bgColor2);
-	const bgMat = new THREE.ShaderMaterial({
-		uniforms: {
-			tText: { value: textTex },
-			tLines: linesTexU, // [TEST] 인트로 점선 (배경에 그려서 유리 칸막이 굴절을 같이 받게)
-			uRes: res,
-			uBg1: { value: new THREE.Color(CFG.bgColor) },
-			uBg2: { value: bg2.color },
-			uHas2: { value: CFG.bgColor2 ? 1 : 0 },
-			uBg2A: { value: bg2.alpha }, // bgColor2 투명도
-			uGlow: glow,
-			uGlowSize: { value: CFG.bgGlowSize },
-			// [TEST] 렌즈 / 파동 / 스크롤
-			uLens: lensPos,
-			uLensAmt: lensAmt,
-			uLensR: { value: CFG.fx.lensSize * DPR },
-			uRip: rip,
-			uRipAmt: { value: CFG.fx.ripple },
-			uDpr: { value: DPR },
-			uShift: textShift,
-			uTextA: textA,
-		},
-		vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
-		fragmentShader: `
-      uniform sampler2D tText, tLines; uniform vec2 uRes, uGlow, uLens; uniform vec3 uBg1, uBg2, uRip;
-      uniform float uHas2, uGlowSize, uBg2A, uLensAmt, uLensR, uRipAmt, uDpr, uShift, uTextA;
-      varying vec2 vUv;
-      vec4 tex(vec2 uv){
-        if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return vec4(0.0);
-        return texture2D(tText, uv);
-      }
-      void main(){
-        vec3 bg = uBg1;
-        if (uHas2 > 0.5) {
-          // 마우스 위치 중심 원형 그라데이션: 가운데 bgColor2 → 바깥 bgColor
-          float d = length(gl_FragCoord.xy - uGlow) / length(uRes);
-          bg = mix(uBg1, uBg2, (1.0 - smoothstep(0.0, uGlowSize, d)) * uBg2A);
-        }
-        vec2 p = gl_FragCoord.xy;
-        vec2 off = vec2(0.0);
-        // 렌즈: 마우스 주변을 끌어당겨 돋보기처럼 부풀림
-        vec2 ld = p - uLens;
-        float lf = 1.0 - smoothstep(0.0, uLensR, length(ld));
-        off -= ld * smoothstep(0.0, 1.0, lf) * uLensAmt;
-        // 파동: 클릭 지점에서 링이 퍼져 나감 (uRip.z = 경과 시간)
-        if (uRipAmt > 0.0 && uRip.z < 1.6) {
-          vec2 rd = p - uRip.xy;
-          float rl = length(rd) + 1e-4;
-          float wpx = 70.0 * uDpr;
-          float k = rl - uRip.z * length(uRes) * 0.55;
-          float w = exp(-(k * k) / (wpx * wpx)) * (1.0 - uRip.z / 1.6);
-          off += rd / rl * sin(k / wpx * 3.14159) * w * uRipAmt * 28.0 * uDpr;
-        }
-        vec2 uv = (p + off) / uRes;
-        // 왜곡된 만큼 RGB 갈라짐
-        vec2 sp = off / uRes * 0.18;
-        vec4 ta = tex(uv + sp), tb = tex(uv), tc = tex(uv - sp);
-        vec3 col = vec3(
-          mix(bg.r, ta.r, ta.a * uTextA),
-          mix(bg.g, tb.g, tb.a * uTextA),
-          mix(bg.b, tc.b, tc.a * uTextA));
-        col = mix(col, vec3(1.0), texture2D(tLines, gl_FragCoord.xy / uRes).a); // 인트로 선
-        gl_FragColor = vec4(col, 1.0);
-      }`,
-		depthTest: false,
-		depthWrite: false,
-	});
-	const bgScene = new THREE.Scene();
-	bgScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), bgMat));
-	const orthoCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-
-	// [TEST] PROJECT 오버레이: 유리 도형 앞에 그림 (굴절 안 됨)
-	const projMat = new THREE.ShaderMaterial({
-		// [TEST] 투명 레이어에 그려도 알파가 맞게 (색은 프리멀티플라이, 알파는 그대로 누적)
-		blending: THREE.CustomBlending,
-		blendSrc: THREE.SrcAlphaFactor,
-		blendDst: THREE.OneMinusSrcAlphaFactor,
-		blendSrcAlpha: THREE.OneFactor,
-		blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
-		uniforms: { tProj: { value: projTex }, uRes: res, uProjA: projA },
-		vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
-		fragmentShader: `
-      uniform sampler2D tProj; uniform vec2 uRes; uniform float uProjA;
-      void main(){
-        vec4 c = texture2D(tProj, gl_FragCoord.xy / uRes);
-        gl_FragColor = vec4(c.rgb, c.a * uProjA);
-      }`,
-		transparent: true,
-		depthTest: false,
-		depthWrite: false,
-	});
-	const projScene = new THREE.Scene();
-	projScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), projMat));
-	// [TEST] 타이틀도 도형 앞에: 배경 셰이더에서는 글자를 빼고(textA 0), 같은 오버레이 방식으로 도형 위에 그림
-	const titleMat = projMat.clone();
-	titleMat.uniforms = { tProj: { value: textTex }, uRes: res, uProjA: { value: 1 } };
-	const titleScene = new THREE.Scene();
-	titleScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), titleMat));
-	textA.value = 0;
-
-	/* ---------- 도형: 피라미드(A) ↔ 사각 바(B) 모핑 ---------- */
-	const scene = new THREE.Scene();
-	const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
-	camera.position.set(0, 0, 10);
-
-	/* 모든 도형을 같은 토폴로지(각도 N분할 × 단면 4변: 바깥벽/윗면/안쪽벽/아랫면)로 생성
-     → 정점 수가 같아서 셰이더에서 바로 보간 가능. 속이 찬 도형은 안쪽 반지름 0 */
-	const N = 240; // [TEST] 4·6·8·12·16·24·40각 꼭짓점이 샘플에 걸리는 수 (32각은 1.5° 차이라 눈에 안 띔)
-	const polyR = (n, R, corner) => (th) => {
-		// 정n각형의 각도별 반지름
-		const seg = (Math.PI * 2) / n;
-		const l = (((th - corner) % seg) + seg) % seg;
-		return (R * Math.cos(Math.PI / n)) / Math.cos(l - Math.PI / n);
-	};
-	const zero = () => 0;
-	/* 단면(프로필)을 4변 × S분할 = K점으로 통일 → 링처럼 곡면인 도형도 같은 정점 수로 표현 */
-	const S = 16,
-		K = S * 4;
-	const P = (th, r, y) => [Math.cos(th) * r, y, Math.sin(th) * r];
-	// 직선 4변 프로필: 바깥벽 → 윗면 → 안쪽벽 → 아랫면
-	const lineProf = (o) => (th) => {
-		const c = [
-			[o.outB(th), o.y0],
-			[o.outT(th), o.y1],
-			[o.inT(th), o.y1],
-			[o.inB(th), o.y0],
-		];
-		const pts = [];
-		for (let e = 0; e < 4; e++) {
-			const [r0, y0] = c[e],
-				[r1, y1] = c[(e + 1) % 4];
-			for (let i = 0; i < S; i++) {
-				const f = i / S;
-				pts.push(P(th, r0 + (r1 - r0) * f, y0 + (y1 - y0) * f));
-			}
-		}
-		return pts;
-	};
-	// 둥근 링(와셔) 프로필: 바깥반지름 R, 구멍 r, 두께 h, 바깥/안쪽 모서리 라운드 cr/ci
-	// 4변(바깥벽/윗면/안쪽벽/아랫면)을 모서리 곡선의 중간에서 나눠 각 S점으로 균일 재배치
-	// R에 함수를 넘기면 각도별 바깥반지름 (예: 둥근 사각형 → 모서리 둥근 큐브)
-	const ringProf = (R, r, h, cr, ci) => {
-		if (typeof R === "function") {
-			const cache = new Map();
-			return (th) => {
-				const Rt = R(th);
-				if (!cache.has(Rt)) cache.set(Rt, ringProf(Rt, r, h, cr, ci));
-				return cache.get(Rt)(th);
-			};
-		}
-		const y1 = h / 2,
-			y0 = -h / 2;
-		const arc = (cx, cy, rad, a0, a1) => {
-			const out = [];
-			for (let i = 0; i <= 12; i++) {
-				const a = a0 + ((a1 - a0) * i) / 12;
-				out.push([cx + Math.cos(a) * rad, cy + Math.sin(a) * rad]);
-			}
-			return out;
-		};
-		const D = Math.PI / 180;
-		const segs = [
-			[...arc(R - cr, y0 + cr, cr, -45 * D, 0), ...arc(R - cr, y1 - cr, cr, 0, 45 * D)], // 바깥벽
-			[...arc(R - cr, y1 - cr, cr, 45 * D, 90 * D), ...arc(r + ci, y1 - ci, ci, 90 * D, 135 * D)], // 윗면
-			[...arc(r + ci, y1 - ci, ci, 135 * D, 180 * D), ...arc(r + ci, y0 + ci, ci, 180 * D, 225 * D)], // 안쪽벽
-			[...arc(r + ci, y0 + ci, ci, 225 * D, 270 * D), ...arc(R - cr, y0 + cr, cr, 270 * D, 315 * D)], // 아랫면
-		];
-		const prof = [];
-		segs.forEach((pl) => {
-			const len = [0];
-			for (let i = 1; i < pl.length; i++) len.push(len[i - 1] + Math.hypot(pl[i][0] - pl[i - 1][0], pl[i][1] - pl[i - 1][1]));
-			const total = len[len.length - 1];
-			for (let i = 0, j = 1; i < S; i++) {
-				const d = (total * i) / S;
-				while (j < pl.length - 1 && len[j] < d) j++;
-				const f = (d - len[j - 1]) / (len[j] - len[j - 1] || 1);
-				prof.push([pl[j - 1][0] + (pl[j][0] - pl[j - 1][0]) * f, pl[j - 1][1] + (pl[j][1] - pl[j - 1][1]) * f]);
-			}
-		});
-		return (th) => prof.map(([rr, y]) => P(th, rr, y));
-	};
-	function buildShape(prof, matrix, smooth) {
-		const pos = [];
-		for (let i = 0; i < N; i++) {
-			const a = prof((i / N) * Math.PI * 2),
-				b = prof(((i + 1) / N) * Math.PI * 2);
-			for (let k = 0; k < K; k++) {
-				const k2 = (k + 1) % K;
-				pos.push(...a[k], ...a[k2], ...b[k2], ...a[k], ...b[k2], ...b[k]);
-			}
-		}
-		const g = new THREE.BufferGeometry();
-		g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-		if (matrix) g.applyMatrix4(matrix);
-		g.computeVertexNormals();
-		if (smooth) {
-			// 곡면 도형은 부드러운 노멀: 같은 위치 정점끼리 면 노멀을 평균
-			const p = g.attributes.position.array,
-				n = g.attributes.normal.array;
-			const acc = new Map();
-			const key = (i) => `${p[i].toFixed(4)},${p[i + 1].toFixed(4)},${p[i + 2].toFixed(4)}`;
-			for (let i = 0; i < p.length; i += 3) {
-				const k = key(i),
-					a = acc.get(k) || [0, 0, 0];
-				a[0] += n[i];
-				a[1] += n[i + 1];
-				a[2] += n[i + 2];
-				acc.set(k, a);
-			}
-			for (let i = 0; i < p.length; i += 3) {
-				const a = acc.get(key(i)),
-					l = Math.hypot(a[0], a[1], a[2]) || 1;
-				n[i] = a[0] / l;
-				n[i + 1] = a[1] / l;
-				n[i + 2] = a[2] / l;
-			}
-		}
-		return { p: g.attributes.position.array, n: g.attributes.normal.array };
-	}
-	const SQ = Math.PI / 4; // 사각형 꼭짓점 45°
-	const HX = Math.PI / 2; // 육각형 꼭짓점 90° (눕히면 위아래 뾰족)
-	// [TEST] 사각 → 육각 → 팔각 → 십각 너트 (같은 두께·구멍, 꼭짓점이 3° 샘플 간격에 맞도록 시작 각도 지정)
-	const nut = (n, corner) =>
-		buildShape(lineProf({ outB: polyR(n, 2.1, corner), outT: polyR(n, 2.1, corner), inT: () => 1.18, inB: () => 1.18, y0: -0.45, y1: 0.45 }), new THREE.Matrix4().makeRotationX(Math.PI / 2));
-	// [TEST] 4 → 6 → 8각 → (다시 4각) 순서로 계속 변형
-	const SIDES = [4, 6, 8]; // 0을 넣으면 원
-	const CORNER = { 4: SQ, 6: HX, 8: 0, 12: HX, 16: 0, 24: 0, 32: 0, 40: HX };
-	const SHAPES = SIDES.map((n) =>
-		n ? nut(n, CORNER[n]) : buildShape(lineProf({ outB: () => 2.06, outT: () => 2.06, inT: () => 1.18, inB: () => 1.18, y0: -0.45, y1: 0.45 }), new THREE.Matrix4().makeRotationX(Math.PI / 2))
-	);
-	while (CFG.clear.length < SHAPES.length) CFG.clear.push(1);
-	// 변형 도중에 거쳐 가는 조각 상태 (멈춰 있을 때는 안 보임)
-	const SHATTER = buildBlades(CFG.shatter);
-
-	/* 조각 상태: 둘레 N조각을 count개 묶음으로 나눠 묶음마다 모서리 둥근 직육면체 하나를 만듦
-	   → 다른 도형과 정점 수·순서가 같아서 각 부분이 가까운 조각으로 갈라졌다가 모임
-	   묶음의 첫/끝 단면은 한 점으로 모아 뚜껑(평평한 끝면)을 닫고, 조각 사이 이음은 면적 0이라 안 보임 */
-	function buildBlades(B) {
-		const COUNT = B.count,
-			LEN = B.length,
-			HW = B.width / 2,
-			HT = B.thick / 2;
-		// 단면(둥근 사각형) 둘레를 K점으로 균일 분할
-		function rectProfile(hw, ht, r) {
-			r = Math.max(0.005, Math.min(r, hw, ht));
-			const pl = [];
-			const corner = (cy, cz, a0) => {
-				for (let i = 0; i <= 8; i++) {
-					const a = a0 + (Math.PI / 2) * (i / 8);
-					pl.push([cy + Math.cos(a) * r, cz + Math.sin(a) * r]);
-				}
-			};
-			corner(hw - r, ht - r, 0);
-			corner(-hw + r, ht - r, Math.PI / 2);
-			corner(-hw + r, -ht + r, Math.PI);
-			corner(hw - r, -ht + r, (Math.PI * 3) / 2);
-			pl.push(pl[0]);
-			const len = [0];
-			for (let i = 1; i < pl.length; i++) len.push(len[i - 1] + Math.hypot(pl[i][0] - pl[i - 1][0], pl[i][1] - pl[i - 1][1]));
-			const total = len[len.length - 1];
-			const out = [];
-			for (let i = 0, j = 1; i < K; i++) {
-				const d = (total * i) / K;
-				while (j < pl.length - 1 && len[j] < d) j++;
-				const f = (d - len[j - 1]) / (len[j] - len[j - 1] || 1);
-				out.push([pl[j - 1][0] + (pl[j][0] - pl[j - 1][0]) * f, pl[j - 1][1] + (pl[j][1] - pl[j - 1][1]) * f]);
-			}
-			return out;
-		}
-		const tw = (B.twist * Math.PI) / 180,
-			sk = (B.skew * Math.PI) / 180;
-		function makeTable(reverse) {
-			const table = new Array(N);
-			for (let b = 0; b < COUNT; b++) {
-				const s0 = Math.round((b * N) / COUNT),
-					s1 = Math.round(((b + 1) * N) / COUNT),
-					m = s1 - s0;
-				// 링/너트와 같은 방향에 오도록 (그 도형들은 X축 90° 회전 → 각도 부호 반대)
-				const phi = -(((s0 + s1) / 2 / N) * Math.PI * 2);
-				for (let j = 0; j < m; j++) {
-					const cap = j === 0 || j === m - 1;
-					// 길이 방향 위치: 양 끝에 촘촘하게 (끝 모서리 라운드용)
-					const s = cap ? (j === 0 ? 0 : LEN) : LEN * (0.5 - 0.5 * Math.cos((Math.PI * (j - 1)) / (m - 3)));
-					const d = Math.min(s, LEN - s);
-					const inset = d < B.round ? B.round - Math.sqrt(Math.max(0, B.round * B.round - (B.round - d) * (B.round - d))) : 0;
-					let prof = cap ? new Array(K).fill([0, 0]) : rectProfile(HW - inset, HT - inset, B.round - inset * 0.6);
-					if (reverse) prof = prof.slice().reverse();
-					table[s0 + j] = prof.map(([y, z]) => {
-						let x = B.inner + s;
-						// 1) 길이축 기준 비틀기 (프로펠러처럼)
-						const y1 = y * Math.cos(tw) - z * Math.sin(tw),
-							z1 = y * Math.sin(tw) + z * Math.cos(tw);
-						// 2) 안쪽 끝 기준으로 옆으로 기울이기 (중심에서 살짝 비껴 나가게)
-						const x2 = B.inner + (x - B.inner) * Math.cos(sk) - y1 * Math.sin(sk),
-							y2 = (x - B.inner) * Math.sin(sk) + y1 * Math.cos(sk);
-						// 3) 원형 배치
-						return [x2 * Math.cos(phi) - y2 * Math.sin(phi), x2 * Math.sin(phi) + y2 * Math.cos(phi), z1];
-					});
-				}
-			}
-			return table;
-		}
-		const build = (reverse) => {
-			const table = makeTable(reverse);
-			return buildShape((th) => table[Math.round((th / (Math.PI * 2)) * N) % N], null, true);
-		};
-		// 면이 바깥을 향하도록 부피 부호로 감기 방향 확인
-		let shape = build(false);
-		let vol = 0;
-		const p = shape.p;
-		for (let i = 0; i < p.length; i += 9) {
-			vol +=
-				p[i] * (p[i + 4] * p[i + 8] - p[i + 5] * p[i + 7]) -
-				p[i + 1] * (p[i + 3] * p[i + 8] - p[i + 5] * p[i + 6]) +
-				p[i + 2] * (p[i + 3] * p[i + 7] - p[i + 4] * p[i + 6]);
-		}
-		if (vol < 0) shape = build(true);
-		return shape;
-	}
-
-	const geoA = new THREE.BufferGeometry();
-	const aPos = new THREE.BufferAttribute(new Float32Array(SHAPES[0].p), 3);
-	const aNrm = new THREE.BufferAttribute(new Float32Array(SHAPES[0].n), 3);
-	const bPos = new THREE.BufferAttribute(new Float32Array(SHAPES[1].p), 3);
-	const bNrm = new THREE.BufferAttribute(new Float32Array(SHAPES[1].n), 3);
-	geoA.setAttribute("position", aPos);
-	geoA.setAttribute("normal", aNrm);
-	geoA.setAttribute("aPosB", bPos);
-	geoA.setAttribute("aNormB", bNrm);
-	geoA.setAttribute("aPosX", new THREE.BufferAttribute(new Float32Array(SHATTER.p), 3));
-	geoA.setAttribute("aNormX", new THREE.BufferAttribute(new Float32Array(SHATTER.n), 3));
-	geoA.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 4);
-	function setPair(from, to) {
-		aPos.array.set(SHAPES[from].p);
-		aNrm.array.set(SHAPES[from].n);
-		bPos.array.set(SHAPES[to].p);
-		bNrm.array.set(SHAPES[to].n);
-		aPos.needsUpdate = aNrm.needsUpdate = bPos.needsUpdate = bNrm.needsUpdate = true;
-	}
-
-	const prism = new THREE.Mesh(geoA);
-	prism.frustumCulled = false;
-	scene.add(prism);
-
+	const glow = { value: new THREE.Vector2(0, 0) }; // 배경 빛 중심(px, 아래가 0)
 	const morph = { value: 0 };
-	const shatter = { value: 0 }; // 조각 상태로 끌려가는 정도 (변형 중간에 최대)
-	const explode = { value: 0 }; // [TEST] 소용돌이로 흩어진 정도 (인트로 + 마우스를 빠르게 움직일 때)
-	const uTimeU = { value: 0 };
-	const mouseL = { value: new THREE.Vector2(0, 0) }; // 흩어진 조각이 쏠리는 방향 (마우스)
-	const flash = { value: 0 }; // 조각이 모여 완성되는 순간 번쩍임
-	const clear = { value: 0 };
-	const CLEAR = CFG.clear; // 도형별 투명도 (너트, 링, 큐브)
+	const flash = { value: 0 }; // 공개 순간 번쩍임
+	const orthoCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+	const SCREEN_VS = `void main(){ gl_Position = vec4(position.xy, 0.0, 1.0); }`;
+	const fullScreen = (mat) => {
+		const s = new THREE.Scene();
+		s.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat));
+		return s;
+	};
 
+	// 배경: 단색 + 오른쪽 위 원형 빛
+	const m = String(CFG.bgColor2).match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)/i);
+	const bgScene = fullScreen(
+		new THREE.ShaderMaterial({
+			uniforms: {
+				uRes: res,
+				uGlow: glow,
+				uBg1: { value: new THREE.Color(CFG.bgColor) },
+				uBg2: { value: m ? new THREE.Color(m[1] / 255, m[2] / 255, m[3] / 255) : new THREE.Color(CFG.bgColor2 || CFG.bgColor) },
+				uBg2A: { value: !CFG.bgColor2 ? 0 : m && m[4] !== undefined ? parseFloat(m[4]) : 1 },
+				uGlowSize: { value: CFG.bgGlowSize },
+			},
+			vertexShader: SCREEN_VS,
+			fragmentShader: `
+      uniform vec2 uRes, uGlow; uniform vec3 uBg1, uBg2; uniform float uBg2A, uGlowSize;
+      void main(){
+        float d = length(gl_FragCoord.xy - uGlow) / length(uRes);
+        gl_FragColor = vec4(mix(uBg1, uBg2, (1.0 - smoothstep(0.0, uGlowSize, d)) * uBg2A), 1.0);
+      }`,
+			depthTest: false,
+			depthWrite: false,
+		}),
+	);
+
+	// 글자 오버레이: 도형 앞에 그림 (투명 레이어에 쌓아도 알파가 맞게)
+	const overlayScene = (tex) =>
+		fullScreen(
+			new THREE.ShaderMaterial({
+				blending: THREE.CustomBlending,
+				blendSrc: THREE.SrcAlphaFactor,
+				blendDst: THREE.OneMinusSrcAlphaFactor,
+				blendSrcAlpha: THREE.OneFactor,
+				blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
+				uniforms: { tTex: { value: tex }, uRes: res },
+				vertexShader: SCREEN_VS,
+				fragmentShader: `uniform sampler2D tTex; uniform vec2 uRes; void main(){ gl_FragColor = texture2D(tTex, gl_FragCoord.xy / uRes); }`,
+				transparent: true,
+				depthTest: false,
+				depthWrite: false,
+			}),
+		);
+	const titleScene = overlayScene(titleCv.tex),
+		projScene = overlayScene(projCv.tex);
+
+	// 유리: 두 도형(A → B)을 uMorph로 보간, 배경을 파장별로 굴절해 합성 + 반사·하이라이트
 	const glassVS = `
-    attribute vec3 aPosB; attribute vec3 aNormB; attribute vec3 aPosX; attribute vec3 aNormX;
-    uniform float uMorph, uShatter, uExplode, uTime;
-    uniform vec2 uMouseL;
-    varying vec3 vN; varying vec3 vEye; varying vec3 vLocal;
+    attribute vec3 aPosB; attribute vec3 aNormB;
+    uniform float uMorph;
+    varying vec3 vN; varying vec3 vEye;
     void main(){
-      // A → B 보간 위에, 변형 중간일수록 조각 상태(X) 쪽으로 끌려감
-      vec3 p = mix(mix(position, aPosB, uMorph), aPosX, uShatter);
-      vec3 n = mix(mix(normal, aNormB, uMorph), aNormX, uShatter) + 1e-5;
-      // [TEST] 흩어짐(소용돌이): 조각들이 각도마다 다르게 휘감기며 바깥·앞뒤로 퍼지고, 마우스 쪽으로 쏠림
-      if (uExplode > 0.0) {
-        float e = uExplode;
-        float ang = atan(p.y, p.x);
-        float r = length(p.xy);
-        float sw = e * (2.4 + 1.6 * sin(ang * 3.0 + uTime * 1.3));
-        mat2 R = mat2(cos(sw), sin(sw), -sin(sw), cos(sw));
-        p.xy = R * p.xy * (1.0 + e * 1.8);
-        n.xy = R * n.xy;
-        p.z += e * 2.6 * sin(ang * 5.0 + r * 2.2 + uTime * 1.7);
-        p.xy += uMouseL * e * 2.2;
-      }
+      vec3 p = mix(position, aPosB, uMorph);
+      vec3 n = mix(normal, aNormB, uMorph) + 1e-5;
       vec4 wp = modelMatrix * vec4(p, 1.0);
       vN = normalize(mat3(modelMatrix) * n);
-      vLocal = p; // [TEST] 만들어지는 애니메이션용 (도형 면 = 로컬 XY 평면)
       vEye = normalize(wp.xyz - cameraPosition);
       gl_Position = projectionMatrix * viewMatrix * wp;
     }`;
 	const glassFS = `
     uniform sampler2D uTex; uniform vec2 uRes;
-    uniform float uPower, uChroma, uSat, uShine, uFres, uSpec, uClear, uIri, uEdge, uBlur, uIriFrom, uIriDeep, uRim, uShade, uRefl, uFringe, uLRefl, uEnv, uLine, uBuild, uFlash, uReveal, uCell;
-    uniform vec3 uLight, uTint;
-    varying vec3 vN; varying vec3 vEye; varying vec3 vLocal;
+    uniform float uPower, uChroma, uSat, uSpec, uClear, uBlur, uRim, uLRefl, uEnv, uLine, uFlash;
+    varying vec3 vN; varying vec3 vEye;
     vec3 sat(vec3 c, float a){ return mix(vec3(dot(c, vec3(.2125,.7154,.0721))), c, a); }
-    // 반사 방향(y)에 따른 어두운 띠 두 줄 (위쪽 굵게, 아래쪽 약하게)
-    float darkBand(float y){
-      return smoothstep(-0.05, 0.1, y) * (1.0 - smoothstep(0.3, 0.45, y))
-           + 0.7 * smoothstep(-0.75, -0.6, y) * (1.0 - smoothstep(-0.5, -0.4, y));
-    }
-    // 반사 방향(y)에 따른 밝은 띠 (위쪽 소프트박스 + 아래쪽 반사판)
+    // 밝은 반사 띠 (위쪽 소프트박스 + 아래쪽 반사판)
     float lightBand(float y){
       return smoothstep(0.35, 0.55, y) * (1.0 - smoothstep(0.8, 0.95, y))
            + 0.5 * smoothstep(-0.3, -0.15, y) * (1.0 - smoothstep(-0.05, 0.08, y));
     }
-    // 프리즘 팔레트 (레퍼런스 픽셀에서 추출): 크림 → 노랑 → 호박 → 진한 빨강 → 보라 → 파랑 → 시안 → 핑크 → 크림
-    vec3 prism(float t){
-      t = fract(t);
-      vec3 c0 = vec3(0.984, 0.906, 0.749), c1 = vec3(0.855, 0.761, 0.031), c2 = vec3(0.710, 0.471, 0.039),
-           c3 = vec3(0.290, 0.020, 0.055), c4 = vec3(0.208, 0.000, 0.498), c5 = vec3(0.008, 0.255, 0.761),
-           c6 = vec3(0.004, 0.702, 0.831), c7 = vec3(0.976, 0.616, 0.800);
-      if (t < 0.12) return mix(c0, c1, t / 0.12);
-      if (t < 0.25) return mix(c1, c2, (t - 0.12) / 0.13);
-      if (t < 0.37) return mix(c2, c3, (t - 0.25) / 0.12);
-      if (t < 0.50) return mix(c3, c4, (t - 0.37) / 0.13);
-      if (t < 0.62) return mix(c4, c5, (t - 0.50) / 0.12);
-      if (t < 0.72) return mix(c5, c6, (t - 0.62) / 0.10);
-      if (t < 0.85) return mix(c6, c7, (t - 0.72) / 0.13);
-      return mix(c7, c0, (t - 0.85) / 0.15);
-    }
-    // [TEST] 스튜디오 환경: 위 소프트박스 + 왼쪽·오른쪽 세로 조명 + 은은한 돔 (카메라 쪽엔 조명 없음 → 정면은 어두움)
+    // 스튜디오 환경: 위 소프트박스 + 좌우 세로 조명 + 은은한 돔 (정면엔 조명 없음 → 어두운 유리)
     float studio(vec3 r){
       float top = smoothstep(0.6, 0.78, r.y) * (1.0 - smoothstep(0.45, 0.75, abs(r.x)));
       float left = (1.0 - smoothstep(-0.88, -0.72, r.x)) * (1.0 - smoothstep(0.35, 0.65, abs(r.y - 0.05)));
@@ -728,22 +286,12 @@
       return texture2D(uTex, gl_FragCoord.xy / uRes + r.xy * off * (1.0 - 0.65 * uClear)).rgb;
     }
     void main(){
-      // [TEST] 만들어지는 중: 위(12시)에서 시계 방향으로 각도가 uBuild까지인 부분만 보임
-      float ang = fract(0.25 - atan(vLocal.y, vLocal.x) / 6.2831853);
-      if (uBuild < 1.0 && ang > uBuild) discard;
-      float cutEdge = uBuild < 1.0 ? 1.0 - smoothstep(0.0, 0.025, uBuild - ang) : 0.0; // 잘리는 끝 가까이
-      // [TEST] 칸 단위 등장: 화면을 40px 격자 칸으로 나눠 가운데 칸부터 바깥으로 (칸마다 약간 들쭉날쭉) 나타남
-      vec2 cellId = floor(gl_FragCoord.xy / uCell);
-      vec2 cellC = floor(uRes * 0.5 / uCell);
-      float cj = fract(sin(dot(cellId, vec2(12.9898, 78.233))) * 43758.5453); // 칸마다 0~1 난수
-      float cd = length(cellId - cellC) + cj * 1.5;
-      if (cd > uReveal) discard;
-      float cellEdge = 1.0 - smoothstep(0.0, 1.2, uReveal - cd); // 막 나타난 칸은 하얗게 번쩍
       vec3 n = normalize(vN);
+      vec2 suv = gl_FragCoord.xy / uRes;
+      // 6파장 굴절 (R·Y·G·C·B·P) → 프리즘처럼 살짝 갈라짐
       vec3 col = vec3(0.0);
-      const int L = SAMPLES;
-      for (int i = 0; i < L; i++) {
-        float s = float(i) / float(L) * uBlur;
+      for (int i = 0; i < SAMPLES; i++) {
+        float s = float(i) / float(SAMPLES) * uBlur;
         float R = samp(n, 1.15, (uPower + s)       * uChroma).r;
         vec3 ty = samp(n, 1.16, (uPower + s * 1.5) * uChroma); float Y = (ty.r*2. + ty.g*2. - ty.b) / 6.;
         float G = samp(n, 1.18, (uPower + s * 2.0) * uChroma).g;
@@ -754,51 +302,21 @@
         col.g += G + (2.*Y + 2.*C - P) / 3.;
         col.b += B + (2.*C + 2.*P - Y) / 3.;
       }
-      col = sat(col / (float(L) * 1.5), uSat); // 6파장 합이 원래 밝기의 1.5배라 정규화
-      // 투명도: 굴절 안 된 배경을 섞어 더 맑게
-      col = mix(col, texture2D(uTex, gl_FragCoord.xy / uRes).rgb, uClear * 0.35);
-      col *= uTint; // 유리 색
-      // 어두운 반사 띠: 주변 어두운 환경이 곡면에 비침. 채널별로 살짝 어긋나게 해서 띠 경계에 호박/파랑 색 갈라짐
+      col = sat(col / (float(SAMPLES) * 1.5), uSat);
+      col = mix(col, texture2D(uTex, suv).rgb, uClear * 0.35); // 굴절 안 된 배경을 섞어 더 맑게
+      float facing = 1.0 - abs(dot(vEye, n)); // 0 = 정면, 1 = 비스듬함
       vec3 rr = reflect(vEye, n);
-      float yy = rr.y + rr.x * 0.35;
-      vec3 dk = vec3(darkBand(yy + uFringe), darkBand(yy), darkBand(yy - uFringe));
-      col *= 1.0 - uRefl * (0.55 + 0.45 * (1.0 - abs(dot(vEye, n)))) * dk;
-      // 밝은 반사 띠: 조명(소프트박스)이 곡면에 비침 → 어두운 배경에서 입체감
-      vec3 lt = vec3(lightBand(yy + uFringe), lightBand(yy), lightBand(yy - uFringe));
-      col += uLRefl * (0.35 + 0.65 * (1.0 - abs(dot(vEye, n)))) * lt;
-      // [TEST] 환경 반사 (프레넬: 정면 약하게, 비스듬할수록 강하게) — 채널별로 살짝 어긋나 모서리에 옅은 색 갈라짐
-      if (uEnv > 0.0) {
-        float F = 0.1 + 0.9 * pow(1.0 - abs(dot(vEye, n)), 3.0);
-        vec3 env = vec3(studio(rr + vec3(uFringe, 0.0, 0.0)), studio(rr), studio(rr - vec3(uFringe, 0.0, 0.0)));
-        col += env * F * uEnv;
-      }
-      // [TEST] 모서리·옆면 하이라이트: 비스듬히 기운 면(테두리·구멍 안쪽 벽·옆면)일수록 밝게, 정면은 어둡게 유지
-      //        + 면과 면이 만나는 선(fwidth로 검출)을 한 번 더 밝게 → 레퍼런스의 가는 흰 선
-      if (uLine > 0.0) {
-        float g = smoothstep(0.28, 0.85, 1.0 - abs(dot(vEye, n)));
-        float eLine = smoothstep(0.05, 0.3, length(fwidth(n)));
-        col += (g * g * g * (0.25 + 0.6 * min(studio(rr), 1.0)) * 1.3 + eLine * 1.1) * uLine;
-      }
-      // 모서리(비스듬히 보이는 곡면): 무지개 분광 + 살짝 어두운 테두리 → 밝은 배경에서도 유리 윤곽이 보임
-      float edge = 1.0 - abs(dot(vEye, n));
-      float band = smoothstep(uIriFrom, uIriFrom + 0.35, edge) * (1.0 - smoothstep(0.93, 1.0, edge) * 0.5);
-      // 프리즘 스펙트럼: 면 기울기 + 화면 위치로 색상이 흐름. uIriDeep이 클수록 진한 빨강/남색까지 내려감
-      float hue = edge * 1.4 + dot(n, vec3(0.45, 0.3, 0.2)) + (gl_FragCoord.x - gl_FragCoord.y * 0.5) / uRes.x * 0.5;
-      vec3 spectrum = prism(hue);
-      col = mix(col, mix(col * (0.4 + spectrum), spectrum, uIriDeep), band * uIri);
-      col *= 1.0 - uEdge * smoothstep(0.55, 0.95, edge);
-      // 몸통 음영: 아래·오른쪽을 향한 면을 살짝 어둡게 → 흰 배경에서도 입체감
-      col *= 1.0 - uShade * smoothstep(-0.3, 1.0, dot(n, normalize(vec3(0.35, -0.8, 0.3))));
-      col = mix(col, vec3(1.0), smoothstep(0.9, 1.0, edge) * uRim); // 실루엣 바로 안쪽 흰 테두리
-      vec3 Lv = normalize(-uLight);
-      float spec = pow(max(dot(n, normalize(Lv - vEye)), 0.0), uShine);
-      float fres = pow(1.0 - abs(dot(vEye, n)), uFres);
-      // 밝은 배경에서는 흰 광택 더하기를 줄여 유리 몸통이 배경색과 같게 (어두운 배경은 그대로)
-      float bgL = dot(texture2D(uTex, gl_FragCoord.xy / uRes).rgb, vec3(0.3333));
-      col += (spec * 0.9 + fres * 0.5 * (1.0 - 0.6 * uClear)) * uSpec * mix(1.0, 0.15, bgL);
-      col += cutEdge * 1.4; // [TEST] 만들어지는 끝을 하얗게 (레이저로 깎는 듯한 느낌)
-      col += uFlash * (0.25 + 0.75 * pow(1.0 - abs(dot(vEye, n)), 2.0)); // [TEST] 완성 순간 테두리부터 번쩍
-      col += cellEdge * 0.9; // [TEST] 막 나타난 칸 번쩍
+      col += uLRefl * (0.35 + 0.65 * facing) * lightBand(rr.y + rr.x * 0.35);
+      col += studio(rr) * (0.1 + 0.9 * pow(facing, 3.0)) * uEnv; // 환경 반사 (프레넬)
+      // 모서리·옆면 하이라이트 + 면이 만나는 선(fwidth)
+      float g = smoothstep(0.28, 0.85, facing);
+      float eLine = smoothstep(0.05, 0.3, length(fwidth(n)));
+      col += (g * g * g * (0.25 + 0.6 * min(studio(rr), 1.0)) * 1.3 + eLine * 1.1) * uLine;
+      col = mix(col, vec3(1.0), smoothstep(0.9, 1.0, facing) * uRim); // 실루엣 흰 테두리
+      float spec = pow(max(dot(n, normalize(normalize(vec3(1.0, 1.2, 1.0)) - vEye)), 0.0), 42.0);
+      float bgL = dot(texture2D(uTex, suv).rgb, vec3(0.3333));
+      col += (spec * 0.9 + pow(facing, 7.0) * 0.5 * (1.0 - 0.6 * uClear)) * uSpec * mix(1.0, 0.15, bgL);
+      col += uFlash * (0.25 + 0.75 * facing * facing);
       gl_FragColor = vec4(col, 1.0);
     }`;
 	const makeGlass = (side, spec) =>
@@ -807,178 +325,187 @@
 				uTex: { value: null },
 				uRes: res,
 				uMorph: morph,
-				uBuild: build,
-				uReveal: reveal,
-				uCell: { value: (CFG.fx.fluteWidth || 40) * DPR },
-				uShatter: shatter,
-				uExplode: explode,
-				uTime: uTimeU,
-				uMouseL: mouseL,
 				uFlash: flash,
-				uClear: clear,
 				uPower: { value: CFG.refraction },
 				uChroma: { value: CFG.chroma },
 				uSat: { value: CFG.saturation },
-				uShine: { value: 42 },
-				uFres: { value: 7 },
 				uSpec: { value: spec * CFG.shine },
-				uLight: { value: new THREE.Vector3(-1, -1.2, -1) },
-				uTint: { value: new THREE.Color(CFG.glassColor) },
-				uIri: { value: CFG.edgeRainbow },
-				uEdge: { value: CFG.edgeDark },
+				uClear: { value: CFG.clear },
 				uBlur: { value: CFG.blur },
-				uIriFrom: { value: CFG.rainbowFrom },
-				uIriDeep: { value: CFG.rainbowDeep },
 				uRim: { value: CFG.rimWhite },
-				uShade: { value: CFG.bodyShade },
-				uRefl: { value: CFG.darkReflect },
-				uFringe: { value: CFG.reflectFringe },
 				uLRefl: { value: CFG.lightReflect },
 				uEnv: { value: CFG.envReflect },
 				uLine: { value: CFG.edgeLine },
 			},
 			defines: { SAMPLES },
-			extensions: { derivatives: true }, // [TEST] fwidth로 모서리 선 검출
+			extensions: { derivatives: true },
 			vertexShader: glassVS,
 			fragmentShader: glassFS,
 			side,
 		});
-	const backMat = makeGlass(THREE.BackSide, CFG.fx.backBright !== undefined ? CFG.fx.backBright : 0.35); // [TEST] 뒷면 밝기 (높을수록 속이 비쳐 보여 유리 같음)
-	const frontMat = makeGlass(THREE.FrontSide, 1.0);
+	const backMat = makeGlass(THREE.BackSide, CFG.backBright);
+	const frontMat = makeGlass(THREE.FrontSide, 1);
 
+	// 렌더 타깃: 배경 / 배경+뒷면 / 도형(투명 배경) / 글자(투명 배경)
 	const rtBg = new THREE.WebGLRenderTarget(1, 1);
 	const rtBack = new THREE.WebGLRenderTarget(1, 1);
+	const rtShape = new THREE.WebGLRenderTarget(1, 1);
+	const rtText = new THREE.WebGLRenderTarget(1, 1);
+	const RTS = [rtBg, rtBack, rtShape, rtText];
+	backMat.uniforms.uTex.value = rtBg.texture;
+	frontMat.uniforms.uTex.value = rtBack.texture;
 
-	// [TEST] 유리 칸막이: 최종 장면을 한 번 더 그려서 세로 골(원통 렌즈) 모양으로 굴절
-	const FLUTE = CFG.fx.flute > 0 && CFG.fx.fluteWidth > 0;
-	const rtFinal = new THREE.WebGLRenderTarget(1, 1);
-	const rtGlow = new THREE.WebGLRenderTarget(1, 1); // 도형만 투명 배경에 (도형 레이어 + 빛 번짐 재료)
-	const rtProj = new THREE.WebGLRenderTarget(1, 1); // PROJECT 글자만 투명 배경에
-	// 레이어 3장(배경+타이틀 / 도형 / PROJECT)을 각각 다른 세기로 골 유리 굴절 후 합성
-	//   글자는 fluteText px, 도형은 flute px 만큼 어긋남
+	// 격자 유리 칸막이: 세 레이어를 칸마다 원통 렌즈처럼 밀어 내고 합성 (+ 도형 빛 번짐, 인트로 열 스윕)
 	const fluteMat = new THREE.ShaderMaterial({
 		uniforms: {
-			tBase: { value: rtFinal.texture },
-			tGlow: { value: rtGlow.texture },
-			tProj: { value: rtProj.texture },
+			tBase: { value: rtBg.texture },
+			tShape: { value: rtShape.texture },
+			tText: { value: rtText.texture },
 			uRes: res,
-			uW: { value: CFG.fx.fluteWidth * DPR },
-			uShift: { value: CFG.fx.flute * DPR },
-			uShiftT: { value: (CFG.fx.fluteText !== undefined ? CFG.fx.fluteText : CFG.fx.flute) * DPR },
+			uW: { value: CFG.fluteWidth * DPR },
+			uShift: { value: CFG.flute * DPR },
+			uShiftT: { value: CFG.fluteText * DPR },
 			uBloom: { value: CFG.bloom },
 			uBloomR: { value: 13 * DPR },
-			uSweep: { value: 999 }, // [TEST] 인트로 2: 가운데 열부터 몇 열까지 유리가 끼워졌는지 (999 = 전부)
+			uSweep: { value: 999 }, // 가운데 열부터 몇 열까지 칸막이가 끼워졌는지 (999 = 전부)
 		},
-		vertexShader: `void main(){ gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+		vertexShader: SCREEN_VS,
 		fragmentShader: `
-      uniform sampler2D tBase, tGlow, tProj; uniform vec2 uRes; uniform float uW, uShift, uShiftT, uBloom, uBloomR, uSweep;
-      // 골 유리 굴절: 골마다 원통 렌즈처럼 밀어 냄 → 경계에서 계단처럼 어긋남 (골 양끝에서 최대 sh px), 대각 3샘플로 살짝 뿌옇게
+      uniform sampler2D tBase, tShape, tText; uniform vec2 uRes; uniform float uW, uShift, uShiftT, uBloom, uBloomR, uSweep;
       vec4 flute(sampler2D t, vec2 p, vec2 b, float sh){
         vec2 uv = (p + b * 2.0 * sh) / uRes;
-        vec2 px = vec2(1.0, 1.0) / uRes * 1.1;
+        vec2 px = vec2(1.0) / uRes * 1.1;
         return (texture2D(t, uv - px) + texture2D(t, uv) + texture2D(t, uv + px)) / 3.0;
       }
       void main(){
         vec2 p = gl_FragCoord.xy;
-        // 세로 골 + 가로 골 (격자 유리): 골 안 위치 0~1 → 가운데 0 · 양끝 ±0.5
-        vec2 b = vec2(fract(p.x / uW), fract(p.y / uW)) - 0.5;
-        // [TEST] 스윕: 가운데 열에서 먼 열일수록 늦게 유리가 끼워짐 (끼워지는 순간 그 열이 살짝 밝게 스침)
+        vec2 b = fract(p / uW) - 0.5; // 칸 안 위치: 가운데 0 · 양끝 ±0.5
         float colD = abs(floor(p.x / uW) - floor(uRes.x * 0.5 / uW));
-        float sw = clamp(uSweep - colD, 0.0, 1.0);
+        float sw = clamp(uSweep - colD, 0.0, 1.0); // 스윕: 가운데 열에서 멀수록 늦게 끼워짐
         b *= sw;
-        float swEdge = sw * (1.0 - sw) * 4.0;
-        vec4 base = flute(tBase, p, b, uShiftT); // 배경
-        vec4 sh = flute(tGlow, p, b, uShift);    // 도형 (프리멀티플라이)
-        vec4 pj = flute(tProj, p, b, uShiftT);   // 글자: 타이틀 + PROJECT (프리멀티플라이, 도형 앞)
+        vec4 base = flute(tBase, p, b, uShiftT);
+        vec4 sh = flute(tShape, p, b, uShift);
+        vec4 tx = flute(tText, p, b, uShiftT);
         vec3 c = base.rgb * (1.0 - sh.a) + sh.rgb;
-        c = c * (1.0 - pj.a) + pj.rgb;
-        // 블룸: 도형의 밝은 부분만 원형으로 모아 은은하게 번지게 (글자는 번지지 않음)
-        if (uBloom > 0.0) {
-          vec2 uv = (p + b * 2.0 * uShift) / uRes;
-          vec3 bl = vec3(0.0);
-          for (int i = 0; i < 12; i++) {
-            float a = float(i) * 0.5236;
-            for (int j = 1; j <= 2; j++) {
-              vec2 o = vec2(cos(a), sin(a)) * uBloomR * float(j) / uRes;
-              bl += max(texture2D(tGlow, uv + o).rgb - 0.55, 0.0);
-            }
-          }
-          c += bl * uBloom / 24.0;
+        c = c * (1.0 - tx.a) + tx.rgb;
+        vec2 uv = (p + b * 2.0 * uShift) / uRes;
+        vec3 bl = vec3(0.0);
+        for (int i = 0; i < 12; i++) {
+          float a = float(i) * 0.5236;
+          for (int j = 1; j <= 2; j++) bl += max(texture2D(tShape, uv + vec2(cos(a), sin(a)) * uBloomR * float(j) / uRes).rgb - 0.55, 0.0);
         }
-        c += swEdge * 0.06; // 끼워지는 열 스침
+        c += bl * uBloom / 24.0;
+        c += sw * (1.0 - sw) * 0.24; // 끼워지는 열이 살짝 밝게 스침
         gl_FragColor = vec4(c, 1.0);
       }`,
 		depthTest: false,
 		depthWrite: false,
 	});
-	const fluteScene = new THREE.Scene();
-	fluteScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), fluteMat));
-	backMat.uniforms.uTex.value = rtBg.texture;
-	frontMat.uniforms.uTex.value = rtBack.texture;
+	const fluteScene = fullScreen(fluteMat);
 
-	// 모바일에서 메모리가 부족하면 브라우저가 WebGL을 회수했다가 돌려줌 → 돌아오면 타이틀 텍스처 다시 올림
+	/* ───────── 4. 도형: 4 → 6 → 8각 너트 ─────────
+	   모든 도형을 같은 토폴로지(둘레 N분할 × 단면 4변 S분할)로 만들어 정점 수가 같음 → 셰이더에서 바로 보간 */
+	const scene = new THREE.Scene();
+	const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+	camera.position.set(0, 0, 10);
+	const N = 240,
+		S = 16,
+		K = S * 4;
+	const SIDES = [4, 6, 8];
+	const CORNER = { 4: Math.PI / 4, 6: Math.PI / 2, 8: 0 }; // 꼭짓점이 샘플 각도에 맞도록 시작 각도
+	const R_OUT = 2.1,
+		R_IN = 1.18,
+		HALF_T = 0.45; // 바깥 반지름(꼭짓점 기준), 구멍 반지름, 두께의 절반
+	const polyR = (n, corner) => (th) => {
+		const seg = (Math.PI * 2) / n;
+		const l = (((th - corner) % seg) + seg) % seg;
+		return (R_OUT * Math.cos(Math.PI / n)) / Math.cos(l - Math.PI / n);
+	};
+	function buildNut(n) {
+		const outR = polyR(n, CORNER[n]);
+		// 단면: 바깥벽 → 윗면 → 안쪽벽 → 아랫면 (각 변 S점)
+		const prof = (th) => {
+			const ro = outR(th);
+			const c = [[ro, -HALF_T], [ro, HALF_T], [R_IN, HALF_T], [R_IN, -HALF_T]];
+			const pts = [];
+			for (let e = 0; e < 4; e++) {
+				const [r0, y0] = c[e],
+					[r1, y1] = c[(e + 1) % 4];
+				for (let i = 0; i < S; i++) {
+					const f = i / S,
+						r = r0 + (r1 - r0) * f;
+					pts.push([Math.cos(th) * r, y0 + (y1 - y0) * f, Math.sin(th) * r]);
+				}
+			}
+			return pts;
+		};
+		const pos = [];
+		for (let i = 0; i < N; i++) {
+			const a = prof((i / N) * Math.PI * 2),
+				b = prof(((i + 1) / N) * Math.PI * 2);
+			for (let k = 0; k < K; k++) {
+				const k2 = (k + 1) % K;
+				pos.push(...a[k], ...a[k2], ...b[k2], ...a[k], ...b[k2], ...b[k]);
+			}
+		}
+		const g = new THREE.BufferGeometry();
+		g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+		g.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2)); // 세워서 정면(로컬 Z)으로
+		g.computeVertexNormals();
+		return { p: g.attributes.position.array, n: g.attributes.normal.array };
+	}
+	const SHAPES = SIDES.map(buildNut);
+
+	const geo = new THREE.BufferGeometry();
+	const attr = (src) => new THREE.BufferAttribute(new Float32Array(src), 3);
+	const aPos = attr(SHAPES[0].p),
+		aNrm = attr(SHAPES[0].n),
+		bPos = attr(SHAPES[1].p),
+		bNrm = attr(SHAPES[1].n);
+	geo.setAttribute("position", aPos);
+	geo.setAttribute("normal", aNrm);
+	geo.setAttribute("aPosB", bPos);
+	geo.setAttribute("aNormB", bNrm);
+	geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 4);
+	function setPair(from, to) {
+		aPos.array.set(SHAPES[from].p);
+		aNrm.array.set(SHAPES[from].n);
+		bPos.array.set(SHAPES[to].p);
+		bNrm.array.set(SHAPES[to].n);
+		aPos.needsUpdate = aNrm.needsUpdate = bPos.needsUpdate = bNrm.needsUpdate = true;
+	}
+	const prism = new THREE.Mesh(geo);
+	prism.frustumCulled = false;
+	scene.add(prism);
+
+	// 모바일에서 WebGL을 회수했다가 돌려주면 글자 텍스처 다시 올림
 	canvas.addEventListener("webglcontextrestored", () => {
-		textTex.needsUpdate = true;
-		projTex.needsUpdate = true;
+		titleCv.tex.needsUpdate = projCv.tex.needsUpdate = true;
 	});
 
-	/* ---------- 리사이즈 / 입력 ---------- */
 	let W = 0,
 		H = 0;
 	function resize() {
 		W = wrap.clientWidth || 1;
 		H = wrap.clientHeight || 1;
 		renderer.setSize(W, H, false);
-		rtBg.setSize(W * DPR, H * DPR);
-		rtBack.setSize(W * DPR, H * DPR);
-		rtFinal.setSize(W * DPR, H * DPR);
-		rtGlow.setSize(W * DPR, H * DPR);
-		rtProj.setSize(W * DPR, H * DPR);
+		RTS.forEach((rt) => rt.setSize(W * DPR, H * DPR));
 		res.value.set(W * DPR, H * DPR);
-		redrawTitle(W, H);
+		glow.value.set(W * 0.95 * DPR, H * DPR); // 배경 빛: 오른쪽 위
+		drawTitle(W, H);
+		drawProj(W, H);
 		camera.aspect = W / H;
-		camera.position.z = W / H < 0.9 ? (10 / (W / H)) * 0.8 : 10;
+		camera.position.z = W / H < 0.9 ? (10 / (W / H)) * 0.8 : 10; // 세로 화면은 뒤로 빠져서 다 보이게
 		camera.updateProjectionMatrix();
 	}
 	new ResizeObserver(resize).observe(wrap);
 	resize();
+	document.fonts.ready.then(markDirty);
 
-	const mouse = { x: 0, y: 0 };
-	// 배경 그라데이션 중심: 처음엔 오른쪽 위, 마우스가 움직이면 따라감 (wrap 기준 px)
-	const glowT = { x: W * 0.95, y: 0 },
-		glowP = { x: W * 0.95, y: 0 };
-	window.addEventListener("pointermove", (e) => {
-		if (CFG.fx.mouse === false) return; // [TEST] 마우스 위치 효과 끔
-		const r = wrap.getBoundingClientRect();
-		mouse.x = Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width) * 2 - 1));
-		mouse.y = Math.max(-1, Math.min(1, ((e.clientY - r.top) / r.height) * 2 - 1));
-		glowT.x = e.clientX - r.left;
-		glowT.y = e.clientY - r.top;
-	});
-
-	/* ---------- 모핑: 도형 클릭 시 다음 도형으로 (너트 → 링 → 큐브 → 반복) ---------- */
-	const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
-	const START = Math.max(0, Math.min(SHAPES.length - 1, CFG.startShape | 0));
-	const stage = { from: START, to: (START + 1) % SHAPES.length, start: -1 }; // start < 0 이면 대기 중
-	function stageAt(t) {
-		if (stage.start < 0) return { from: stage.from, to: stage.to, u: 0 };
-		const c = (t - stage.start) / MORPH;
-		if (c >= 1) {
-			// 변형 완료 → 도착한 도형을 기준으로 다음 쌍 준비
-			stage.from = stage.to;
-			stage.to = (stage.to + 1) % SHAPES.length;
-			stage.start = -1;
-			stage.end = t; // [TEST] 자동 변형 대기 시작 시점
-			return { from: stage.from, to: stage.to, u: 0 };
-		}
-		// [TEST] flow: 멈춤 없이 이어서 변형 → 등속(선형)으로 진행해야 도형 사이에서 멈칫하지 않음
-		return { from: stage.from, to: stage.to, u: CFG.fx.flow ? c : ease(c) };
-	}
-
-	// 도형 히트 테스트 (앞/뒷면 모두)
-	const ray = new THREE.Raycaster();
-	const hitMat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
-	const ndc = new THREE.Vector2();
+	/* ───────── 5. 입력: 도형 드래그 회전 (놓으면 관성) ───────── */
+	const ray = new THREE.Raycaster(),
+		hitMat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }),
+		ndc = new THREE.Vector2();
 	function hitShape(e) {
 		const r = wrap.getBoundingClientRect();
 		if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return false;
@@ -990,51 +517,40 @@
 		prism.material = keep;
 		return hit;
 	}
-	// [TEST] 프로젝트 섹션이 도형 위로 올라오므로 그 위에서는 도형 드래그·클릭·커서 반응 안 함
-	const isUI = (e) => e.target.closest && e.target.closest("a, button, input, label, select, textarea, #project_site, .c_scrollbar");
-	// 커서 상태 알림: 전역 커서(cursor.js)는 <html data-cursor>를 읽고, 없을 땐 기본 커서로 대체
-	const NATIVE = { drag: "grab", grabbing: "grabbing" };
+	// 프로젝트 섹션·링크 위에서는 반응 안 함
+	const isUI = (e) => e.target.closest && e.target.closest("a, button, input, label, select, textarea, #project_site");
+	// 커서 상태: cursor.js가 <html data-cursor>를 읽음 (없으면 기본 커서)
 	function setCursor(s) {
-		const root = document.documentElement;
 		if (s) root.dataset.cursor = s;
 		else delete root.dataset.cursor;
-		wrap.style.cursor = NATIVE[s] || "";
+		wrap.style.cursor = { drag: "grab", grabbing: "grabbing" }[s] || "";
 	}
-
-	/* ---------- 드래그로 자유 회전 (360°, 놓으면 관성으로 계속 돌다가 멈춤) ---------- */
 	const qUser = new THREE.Quaternion(),
 		qStep = new THREE.Quaternion();
 	const AX = new THREE.Vector3(1, 0, 0),
-		AY = new THREE.Vector3(0, 1, 0);
-	const drag = { on: false, moved: false, x: 0, y: 0, vx: 0, vy: 0 };
+		AY = new THREE.Vector3(0, 1, 0),
+		AZ = new THREE.Vector3(0, 0, 1);
+	const drag = { on: false, x: 0, y: 0, vx: 0, vy: 0 };
 	function spinBy(dx, dy) {
-		// 화면 기준 축으로 회전 (좌우 드래그 = 세로축, 상하 드래그 = 가로축)
 		qStep.setFromAxisAngle(AY, dx);
 		qUser.premultiply(qStep);
 		qStep.setFromAxisAngle(AX, dy);
 		qUser.premultiply(qStep);
 	}
 	window.addEventListener("pointerdown", (e) => {
-		drag.moved = false; // 누를 때마다 초기화 (이전 드래그 흔적이 다음 클릭을 막지 않게)
 		if (isUI(e) || !hitShape(e)) return;
-		e.preventDefault(); // 드래그 중 텍스트 선택 방지
-		Object.assign(drag, { on: true, moved: false, x: e.clientX, y: e.clientY, vx: 0, vy: 0 });
+		e.preventDefault();
+		Object.assign(drag, { on: true, x: e.clientX, y: e.clientY, vx: 0, vy: 0 });
 		setCursor("grabbing");
 	});
 	window.addEventListener("pointermove", (e) => {
-		if (drag.on) {
-			const dx = e.clientX - drag.x,
-				dy = e.clientY - drag.y;
-			drag.x = e.clientX;
-			drag.y = e.clientY;
-			if (Math.hypot(dx, dy) > 2) drag.moved = true; // 조금이라도 끌면 클릭(변형)으로 치지 않음
-			const k = CFG.dragSpeed;
-			spinBy(dx * k, dy * k);
-			drag.vx = dx * k;
-			drag.vy = dy * k;
-			return;
-		}
-		setCursor(!isUI(e) && hitShape(e) ? "drag" : ""); // 도형 위에서는 DRAG 커서
+		if (!drag.on) return setCursor(!isUI(e) && hitShape(e) ? "drag" : "");
+		const k = CFG.dragSpeed;
+		drag.vx = (e.clientX - drag.x) * k;
+		drag.vy = (e.clientY - drag.y) * k;
+		drag.x = e.clientX;
+		drag.y = e.clientY;
+		spinBy(drag.vx, drag.vy);
 	});
 	const endDrag = () => {
 		if (!drag.on) return;
@@ -1043,669 +559,246 @@
 	};
 	window.addEventListener("pointerup", endDrag);
 	window.addEventListener("pointercancel", endDrag);
-	// 터치로 도형을 돌릴 때 페이지 스크롤 막기
-	window.addEventListener("touchmove", (e) => drag.on && e.preventDefault(), { passive: false });
+	window.addEventListener("touchmove", (e) => drag.on && e.preventDefault(), { passive: false }); // 도형 돌릴 땐 스크롤 막기
 
-	// 클릭(드래그 아님) 시 다음 도형으로 변형
-	window.addEventListener("click", (e) => {
-		if (drag.moved) return (drag.moved = false); // 방금 드래그했으면 클릭 무시
-		if (isUI(e)) return;
-		if (CFG.fx.clickMorph === false) return; // [TEST] 클릭 변형 끔
-		if (stage.start >= 0 || !hitShape(e)) return; // 변형 중이거나 도형 밖이면 무시
-		stage.start = clock.getElapsedTime();
-	});
-
-	/* ---------- 루프 ---------- */
-	const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-	const clock = new THREE.Clock();
-	const tilt = { x: 0, z: 0 };
-	const qA = new THREE.Quaternion(),
-		qB = new THREE.Quaternion();
-	const eA = new THREE.Euler(),
-		eB = new THREE.Euler();
-	let curFrom = -1; // 첫 프레임에 시작 도형 쌍을 올림
-	const kick = { from: -1, acc: 0, amt: 0, dir: 1, tiltDir: 1 }; // [TEST] 변형할 때 도는 각도
-	const AZ = new THREE.Vector3(0, 0, 1); // 너트 면의 축 (도형을 X축으로 90° 세워 만들었으므로 로컬 Z가 정면 방향)
-
-	/* ---------- [TEST] 추가 인터랙션 ---------- */
-	const FX = CFG.fx;
-	const FXON = !reduce;
-	// 글자 이징: 기존 PROJECT 타이틀과 동일 (lusion = cubic-bezier(.35, 0, 0, 1)), 글자당 0.67초 · 1/30초 간격
-	let EASE_L = "power4.out";
-	if (window.gsap && window.CustomEase) {
+	/* ───────── 6. 인트로 ─────────
+	   1) 로딩: 0 → 100% (4·8의 배수, 자리마다 숫자 롤링) + 진행선 — 도형은 작게 돌며 4 → 6 → 8 → 4각으로 변형
+	   2) 공개: 로더가 빠지고 도형이 커지며, 칸막이가 가운데 열부터 한 열씩 끼워짐
+	   3) 타이틀 글자 → 헤더 → 이후 autoMorph초마다 자동 변형 (클릭하면 건너뜀) */
+	let EASE_L = "power4.out"; // 글자 이징 (cubic-bezier(.35, 0, 0, 1))
+	if (HAS_GSAP && window.CustomEase) {
 		gsap.registerPlugin(CustomEase);
 		EASE_L = CustomEase.create("lusionTitle", "M0,0 C0.35,0 0,1 1,1");
 	}
-	const CH_DUR = 1 / 1.5,
-		CH_STAG = 1 / 30;
-	const markDirty = () => (txtDirty = true);
-	// 1) 인트로: 타이틀 글자별로 아래에서 회전하며 올라옴 + 도형 스케일/회전 등장
-	const intro = { s: 1, spin: 0, depth: 1, done: true, shatter: 0, explode: 0, pop: 0, energy: 0, face: 0, rx: 0, ry: 0, lm: -1 };
-	let introStart = null,
-		frame = 0;
-	if (FX.intro && FXON && window.gsap) {
-		// [TEST] 인트로 (새로 정리)
-		//   1) 선   : 칸막이 골 경계와 같은 자리(40px 간격)에 옅은 선이 가운데 쌍부터 양쪽 두 줄씩 그어짐
-		//   2) 도형 : 처음부터 완성된 유리 도형이 선의 40px 칸을 따라 가운데 칸부터 바깥으로 착착 나타남 (막 나타난 칸은 번쩍, 계속 돎)
-		//   3) 멈춤 : 어긋나는 효과 없이(칸막이 0) 선 + 도형을 그대로 보여 줌 (회전은 계속)
-		//   4) 효과 : 선이 사라지는 만큼 격자 유리 칸막이 효과가 차오름 → 평소 자세 → 타이틀 → 헤더
-		const LINE_A = 0.1; // 선 투명도 rgba(255,255,255,0.1)
-		intro.done = false;
-		intro.face = 1; // 1 = 정면 자세 고정 (rx·ry만 적용)
-		intro.rx = 0;
-		intro.ry = 0;
-		intro.s = 1;
-		intro.depth = 1; // 처음부터 완성된 유리 도형
-		intro.rx = 0.4;
-		intro.ry = -0.55;
-		intro.spinOn = false;
-		reveal.value = -2; // 칸 단위 등장 전엔 숨김
+	const CH = { duration: 1 / 1.5, ease: EASE_L, stagger: 1 / 30, onUpdate: markDirty }; // 글자 하나 0.67초, 1/30초 간격
+	const showChars = (arr, v, delay = 0) => gsap.to(arr, { ...CH, v, delay });
+
+	const clock = new THREE.Clock();
+	// s: 크기 배율, face: 1이면 인트로 자세(rx·ry)로 고정, lm: 로딩 중 변형 진행(0~3, -1 = 끝)
+	const intro = { done: true, s: 1, face: 0, rx: 0.4, ry: -0.55, lm: -1 };
+	const stage = { from: 0, to: 1, start: -1, last: 0 }; // 자동 변형 상태 (start < 0 = 대기)
+	let curFrom = -1,
+		introStart = null;
+	let titleOut = false; // 스크롤로 타이틀이 빠진 상태 (7번에서 사용)
+
+	if (PLAY_INTRO) {
+		Object.assign(intro, { done: false, s: 0.5, face: 1, lm: 0 });
+		fluteMat.uniforms.uSweep.value = 0;
 		const hdr = document.querySelectorAll("#header .logo, #header #gnb li, #header .m_menu_btn");
 		gsap.set(hdr, { autoAlpha: 0, y: -16 });
-		document.documentElement.classList.remove("intro-pending");
-		// 칸막이 효과는 0에서 시작
-		const fluteTarget = { s: fluteMat.uniforms.uShift.value, t: fluteMat.uniforms.uShiftT.value };
-		fluteMat.uniforms.uShift.value = fluteMat.uniforms.uShiftT.value = 0;
+		root.classList.remove("intro-pending");
 
-		// 인트로 선택: GLASS_CONFIG.fx.introType (1 | 2), 주소 끝에 #intro1 / #intro2를 붙이면 그걸로
-		const HASH = { "#intro1": 1, "#intro2": 2, "#intro3": 3 }[location.hash];
-		const INTRO = HASH || ([1, 2, 3].includes(CFG.fx.introType) ? CFG.fx.introType : 2);
-		if (INTRO === 1) {
-		// ───────── 인트로 1: 선 → 칸 단위 등장 → 멈춤 → 칸막이 효과 ─────────
-			// 선은 화면 맨 위 2D 캔버스에 그림 (헤더보다 아래)
-			const ov = document.createElement("canvas");
-			ov.style.cssText = "position:fixed;inset:0;width:100%;height:100%;z-index:50;pointer-events:none;";
-			document.body.appendChild(ov);
-			const oc = ov.getContext("2d");
-			const G = CFG.fx.fluteWidth || 40;
-			const L = { draw: 0, alpha: 1 }; // draw: 그어진 쌍 수(0~1 비율), alpha: 선 투명도 배율
-			function drawLines() {
-				const w = window.innerWidth,
-					h = window.innerHeight,
-					d = Math.min(window.devicePixelRatio || 1, 2);
-				if (ov.width !== Math.floor(w * d)) ov.width = Math.floor(w * d);
-				if (ov.height !== Math.floor(h * d)) ov.height = Math.floor(h * d);
-				oc.setTransform(d, 0, 0, d, 0, 0);
-				oc.clearRect(0, 0, w, h);
-				if (L.draw <= 0 || L.alpha <= 0) return;
-				const cx = w / 2,
-					cy = h / 2;
-				const nMax = Math.ceil(Math.max(w, h) / 2 / G) + 1;
-				const step = L.draw * nMax; // 가운데에서 몇 번째 쌍까지 그어졌는지
-				// n번째 쌍(가운데에서 n칸)의 그어진 정도 0~1 → 가운데에서 양 끝으로 뻗음
-				const q = (dist) => {
-					const v = Math.min(1, Math.max(0, (step - Math.floor(dist / G)) * 1.2));
-					return 1 - Math.pow(1 - v, 3);
-				};
-				oc.strokeStyle = `rgba(255,255,255,${LINE_A * L.alpha})`;
-				oc.lineWidth = 1;
-				oc.beginPath();
-				// 세로선: 칸막이 셰이더와 같은 기준 (왼쪽에서 G 간격)
-				for (let x = G; x < w; x += G) {
-					const e = q(Math.abs(x - cx));
-					if (e <= 0) continue;
-					const X = Math.round(x) + 0.5;
-					oc.moveTo(X, cy);
-					oc.lineTo(X, cy - (h / 2) * e);
-					oc.moveTo(X, cy);
-					oc.lineTo(X, cy + (h / 2) * e);
-				}
-				// 가로선: 셰이더는 아래에서 G 간격 → 화면 좌표로 뒤집음
-				for (let yb = G; yb < h; yb += G) {
-					const y = h - yb;
-					const e = q(Math.abs(y - cy));
-					if (e <= 0) continue;
-					const Y = Math.round(y) + 0.5;
-					oc.moveTo(cx, Y);
-					oc.lineTo(cx - (w / 2) * e, Y);
-					oc.moveTo(cx, Y);
-					oc.lineTo(cx + (w / 2) * e, Y);
-				}
-				oc.stroke();
-			}
+		const PCT = [0, 4, 8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 100];
+		const font = `"${CFG.fontFamily}", "Unbounded", sans-serif`;
+		const numSize = Math.round((fontSize(window.innerWidth) * 2) / 3); // 숫자 = 타이틀의 2/3
+		const box = document.createElement("div");
+		box.className = "intro2";
+		box.innerHTML = `
+			<div class="i2-meta">
+				<span class="i2-count"><span class="i2-num">${'<span class="i2-d"><b>0</b></span>'.repeat(3)}</span><span class="i2-pct">%</span></span>
+				<span class="i2-label">Loading</span>
+			</div>
+			<div class="i2-bar"><i></i></div>`;
+		const css = document.createElement("style");
+		css.textContent = `
+			.intro2 { --side: 80px; --bot: 40px; --gap: 40px; position: fixed; inset: 0; z-index: 60; pointer-events: none; color: #fff; font-family: ${font}; }
+			@media (max-width: 1660px) { .intro2 { --side: 40px; } }
+			@media (max-width: 768px) { .intro2 { --side: 20px; } }
+			.intro2 .i2-meta { position: absolute; left: var(--side); right: var(--side); bottom: calc(var(--bot) + 1px + var(--gap)); display: flex; justify-content: space-between; align-items: flex-end; font-size: 12px; line-height: 16px; font-weight: 100; letter-spacing: 0.08em; text-transform: uppercase; }
+			.intro2 .i2-count { font-size: ${numSize}px; line-height: 1; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
+			.intro2 .i2-num { font-weight: 900; }
+			.intro2 .i2-pct { margin-left: 4px; font-size: 12px; line-height: 16px; letter-spacing: 0.08em; opacity: 0.3; }
+			.intro2 .i2-label { opacity: 0.3; }
+			.intro2 .i2-d { position: relative; display: inline-block; overflow: hidden; vertical-align: bottom; }
+			.intro2 .i2-d b { display: block; font-weight: inherit; }
+			.intro2 .i2-d b + b { position: absolute; left: 0; top: 0; }
+			.intro2 .i2-bar { position: absolute; left: var(--side); right: var(--side); bottom: var(--bot); height: 1px; background: rgba(255,255,255,0.1); overflow: hidden; }
+			.intro2 .i2-bar i { position: absolute; inset: 0; background: #fff; transform-origin: 0 50%; transform: scaleX(0); }`;
+		document.head.appendChild(css);
+		document.body.appendChild(box);
+		const $ = (q) => box.querySelector(q);
+		const loader = [$(".i2-meta"), $(".i2-bar")];
+		const bar = $(".i2-bar i");
 
-			let introTl = null;
-			const finish = () => {
-				intro.done = true;
-				stage.last = clock.getElapsedTime();
-				gsap.ticker.remove(drawLines);
-				ov.remove();
-				reveal.value = 999;
+		// 글자 아랫선(베이스라인)이 선에서 정확히 --gap 위에 오도록, 줄 높이 여백만큼 내림
+		const fitBase = () => {
+			const cx = document.createElement("canvas").getContext("2d");
+			const pad = (weight, fs, lh) => {
+				cx.font = `${weight} ${fs}px ${font}`;
+				const mt = cx.measureText("0");
+				return mt.fontBoundingBoxAscent ? (lh - mt.fontBoundingBoxAscent + mt.fontBoundingBoxDescent) / 2 : 0;
 			};
-			// 첫 프레임(셰이더 컴파일로 멈칫함)이 지난 뒤 시작
-			introStart = () => {
-				gsap.ticker.add(drawLines);
-				introTl = gsap.timeline({ onComplete: finish });
-				introTl.timeScale(0.7); // 인트로 전체 속도 (1 = 원래, 낮을수록 느림)
-				introTl
-					// 1) 선: 가운데 쌍부터 두 줄씩
-					.to(L, { draw: 1, duration: 1.8, ease: "power1.inOut" }, 0.2)
-					// 2) 도형: 완성된 유리 도형이 선의 40px 칸을 따라 가운데 칸부터 바깥으로 '착착' 나타남 (막 나타난 칸은 번쩍) — 나타나면서부터 계속 돎
-					.add(() => (intro.spinOn = true), 1.9)
-					.to(reveal, { value: 16, duration: 1.1, ease: "power2.out" }, 1.9)
-					.add(() => gsap.fromTo(flash, { value: 0.4 }, { value: 0, duration: 1.0, ease: "power2.out" }), 2.7)
-					// 3) 멈춤: 효과 없이 그대로 보여 줌 — 도형은 계속 돎 (약 3.0 ~ 4.2초)
-					// 4) 효과: 선이 사라지는 만큼 칸막이 효과가 차오름
-					.to(L, { alpha: 0, duration: 1.0, ease: "power2.inOut" }, 4.2)
-					.to(fluteMat.uniforms.uShift, { value: fluteTarget.s, duration: 1.0, ease: "power2.inOut" }, 4.2)
-					.to(fluteMat.uniforms.uShiftT, { value: fluteTarget.t, duration: 1.0, ease: "power2.inOut" }, 4.2)
-					.to(intro, { face: 0, duration: 2.0, ease: "expo.out" }, 4.6) // 평소 자세로
-					.add(() => {
-						if (!titleOut) gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
-					}, 5.0) // 타이틀
-					.to(hdr, { autoAlpha: 1, y: 0, duration: 0.6, ease: "power4.out", stagger: 0.05 }, 5.3); // 헤더
-			};
-			// 인트로 중 클릭하면 끝으로 건너뜀
-			window.addEventListener("click", () => {
-				if (introTl && !intro.done) introTl.progress(1);
+			$(".i2-count").style.marginBottom = -pad(900, numSize, numSize) + "px";
+			$(".i2-label").style.marginBottom = -pad(100, 12, 16) + "px";
+		};
+		fitBase();
+		document.fonts.ready.then(fitBase);
+
+		// 숫자 롤링: 바뀐 자리만 기존 숫자는 위로 빠지고 새 숫자가 아래에서 올라옴
+		const slots = [...box.querySelectorAll(".i2-d")];
+		let numStr = "000";
+		const setNum = (str) => {
+			if (str === numStr) return;
+			slots.forEach((slot, i) => {
+				if (str[i] === numStr[i]) return;
+				if (slot._tl) slot._tl.progress(1); // 이전 롤링이 남아 있으면 마무리
+				const old = slot.firstElementChild;
+				const nu = document.createElement("b");
+				nu.textContent = str[i];
+				slot.appendChild(nu);
+				const roll = { duration: 0.5, ease: "power3.out" };
+				slot._tl = gsap
+					.timeline({ onComplete: () => (old.remove(), gsap.set(nu, { clearProps: "all" }), (slot._tl = null)) })
+					.to(old, { yPercent: -100, ...roll }, i * 0.04)
+					.fromTo(nu, { yPercent: 100 }, { yPercent: 0, ...roll }, i * 0.04);
 			});
-		} else if (INTRO === 3) {
-			// ───────── 인트로 3: 건축 영상처럼 — 디테일 컷 4개 → 롱테이크 줌아웃 ─────────
-			//   도형의 모서리·구멍 가장자리·옆면·윗변을 아주 크게 잡은 컷을 하나씩 보여 주고(컷 사이 짧게 검은 화면)
-			//   마지막 컷에서 끊지 않고 천천히 돌며 뒤로 빠져나와 전체가 보임
-			//   → 굴절이 평소 세기로 가라앉으며 칸막이가 가운데 열부터 끼워짐 → 진짜 타이틀(캔버스)이 올라옴 → 헤더
-			//   화면에 따로 띄우는 글자는 작은 캡션 2개(기존 여백 40px 자리)뿐이라 겹치거나 남는 글자 없음
-			reveal.value = 999;
-			intro.face = 1;
-			intro.rx = 0.15;
-			intro.ry = -1.2;
-			intro.px = 1.2; // 구멍 가장자리 쪽으로 치우친 구도
-			intro.py = -0.3;
-			intro.s = 5.2; // 아주 가까이
-			intro.spinOn = true;
-			intro.lm = -1;
+			numStr = str;
+		};
+
+		const colsMax = Math.ceil(window.innerWidth / 2 / CFG.fluteWidth) + 2;
+		const load = { p: 0 };
+		let tl = null;
+		const finish = () => {
+			// 로딩이 4각으로 끝났으니 평소 변형은 4 → 6각부터
+			Object.assign(intro, { done: true, lm: -1 });
+			Object.assign(stage, { from: 0, to: 1, start: -1, last: clock.getElapsedTime() });
+			curFrom = -1;
 			fluteMat.uniforms.uSweep.value = 999;
-			fluteMat.uniforms.uShift.value = fluteTarget.s * 2.2; // 가까울 땐 굴절 과장
-			fluteMat.uniforms.uShiftT.value = 0;
-			const font = `"${CFG.fontFamily}", "Unbounded", sans-serif`;
-			const box = document.createElement("div");
-			box.className = "intro3";
-			box.innerHTML = `<canvas class="i3-hud"></canvas><div class="i3-black"></div><div class="i3-cap i3-l">Portfolio — 2026</div><div class="i3-cap i3-r">00:00:00</div>`;
-			const css = document.createElement("style");
-			css.textContent = `
-				.intro3 { position: fixed; inset: 0; z-index: 60; pointer-events: none; color: #fff; font-family: ${font}; }
-				.intro3 .i3-black { position: absolute; inset: 0; background: #000; }
-				.intro3 .i3-hud { position: absolute; inset: 0; width: 100%; height: 100%; }
-				.intro3 { --side: 80px; }
-				@media (max-width: 1660px) { .intro3 { --side: 40px; } }
-				@media (max-width: 768px) { .intro3 { --side: 20px; } }
-				.intro3 .i3-cap { position: absolute; bottom: 40px; font-size: 12px; line-height: 16px; letter-spacing: 0.08em; text-transform: uppercase; font-variant-numeric: tabular-nums; opacity: 0; }
-				.intro3 .i3-l { left: var(--side); }
-				.intro3 .i3-r { right: var(--side); }
-				@media (max-width: 768px) { .intro3 .i3-cap { bottom: 24px; } }`;
-			document.head.appendChild(css);
-			document.body.appendChild(box);
-			const $ = (q) => box.querySelector(q);
-			const tc = $(".i3-r");
-			const colsMax = Math.ceil(window.innerWidth / 2 / (CFG.fx.fluteWidth || 40)) + 2;
-			const t0 = performance.now();
-			// ── 모션 그래픽 HUD: 초점 프레임(모서리 괄호) · 동심원 펄스 · 눈금자 · 실시간 수치 라벨 ──
-			const hud = $(".i3-hud"),
-				hc = hud.getContext("2d");
-			const H = { a: 0, frame: 0, rings: 0, ruler: 0, labels: 0, dots: 0, planes: 0, collapse: 0 }; // 각 요소 투명도/진행
-			const pulses = []; // 동심원 시작 시각
-			let lastPulse = 0;
-			// 점 · 선 — 선은 1px · rgba(255,255,255,0.1)로만, 점으로 강조 (면 없음)
-			const LINE = (a) => `rgba(255,255,255,${0.1 * a})`;
-			const G = CFG.fx.fluteWidth || 40;
-			const cellSeed = (x, y) => (Math.sin(x * 127.1 + y * 311.7) * 43758.5453) % 1; // 칸마다 고정 난수
-			const drawHud = (ms) => {
-				const w = window.innerWidth,
-					h = window.innerHeight,
-					d = Math.min(window.devicePixelRatio || 1, 2);
-				if (hud.width !== Math.floor(w * d)) hud.width = Math.floor(w * d);
-				if (hud.height !== Math.floor(h * d)) hud.height = Math.floor(h * d);
-				hc.setTransform(d, 0, 0, d, 0, 0);
-				hc.clearRect(0, 0, w, h);
-				if (H.a <= 0) return;
-				const ppw = h / 2 / (Math.tan((camera.fov * Math.PI) / 360) * camera.position.z);
-				const k = 1 - H.collapse; // 마지막에 가운데로 접힘
-				const cx = w / 2,
-					cy = h / 2; // HUD는 화면 가운데 고정 (디테일 컷에서도 화면 기준)
-				const half = Math.min(Math.min(w, h) / 2 - 40, 2.4 * (intro.s || 1) * ppw) * (0.6 + 0.4 * H.frame) * k;
-				// 칸 좌표 (칸막이 골과 같은 40px 격자: 왼쪽·아래 기준)
-				const gx0 = Math.floor((cx - half) / G),
-					gx1 = Math.ceil((cx + half) / G);
-				const gy0 = Math.floor((h - (cy + half)) / G),
-					gy1 = Math.ceil((h - (cy - half)) / G);
-				hc.lineWidth = 1;
-				// ── 선 (모두 1px · 0.1): 가운데 십자 (화면 끝까지), 프레임 테두리, 동심원, 눈금
-				if (H.frame > 0) {
-					hc.strokeStyle = LINE(H.frame * H.a);
-					hc.beginPath();
-					hc.moveTo(0, Math.round(cy) + 0.5);
-					hc.lineTo(w, Math.round(cy) + 0.5);
-					hc.moveTo(Math.round(cx) + 0.5, 0);
-					hc.lineTo(Math.round(cx) + 0.5, h);
-					hc.rect(Math.round(cx - half) + 0.5, Math.round(cy - half) + 0.5, Math.round(half * 2), Math.round(half * 2));
-					hc.stroke();
-				}
-				if (H.rings > 0) {
-					if (ms - lastPulse > 600) {
-						pulses.push(ms);
-						lastPulse = ms;
-					}
-					for (let n = pulses.length - 1; n >= 0; n--) {
-						const age = (ms - pulses[n]) / 2000;
-						if (age > 1) {
-							pulses.splice(n, 1);
-							continue;
-						}
-						hc.strokeStyle = LINE((1 - age) * H.rings * H.a);
-						hc.beginPath();
-						hc.arc(cx, cy, (40 + age * Math.max(w, h) * 0.6) * k, 0, Math.PI * 2);
-						hc.stroke();
-					}
-				}
-				if (H.ruler > 0) {
-					const off = ((intro.spinAcc || 0) * 240 + ms * 0.04) % 40;
-					hc.strokeStyle = LINE(H.ruler * H.a);
-					hc.beginPath();
-					for (let x = -off; x < w; x += 8) {
-						const big = Math.round((x + off) / 8) % 5 === 0;
-						const l = (big ? 8 : 4) * H.ruler;
-						hc.moveTo(Math.round(x) + 0.5, 40);
-						hc.lineTo(Math.round(x) + 0.5, 40 + l);
-						hc.moveTo(Math.round(x) + 0.5, h - 72);
-						hc.lineTo(Math.round(x) + 0.5, h - 72 - l);
-					}
-					hc.stroke();
-				}
-				// ── 점: 프레임 안 격자 교차점(작은 점) · 프레임 네 모서리 · 가운데 (큰 점)
-				const dot = (x, y, sz, a) => {
-					hc.fillStyle = `rgba(255,255,255,${a})`;
-					hc.fillRect(Math.round(x - sz / 2), Math.round(y - sz / 2), sz, sz);
-				};
-				if (H.dots > 0) {
-					for (let gx = gx0; gx <= gx1; gx++)
-						for (let gy = gy0; gy <= gy1; gy++) {
-							const x = gx * G,
-								y = h - gy * G;
-							if (Math.abs(x - cx) > half || Math.abs(y - cy) > half) continue;
-							dot(x, y, 2, 0.45 * H.dots * H.a);
-						}
-				}
-				if (H.frame > 0) {
-					for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) dot(cx + sx * half, cy + sy * half, 6 * H.frame, H.frame * H.a);
-					dot(cx, cy, 8 * H.frame, H.frame * H.a);
-				}
-				// 실시간 수치 (작은 글씨)
-				if (H.labels > 0) {
-					const deg = Math.round(((((intro.spinAcc || 0) * (CFG.fx.spin || 0.6) + intro.ry) * 180) / Math.PI) % 360 + 360) % 360;
-					hc.font = '500 10px "Pretendard", monospace';
-					hc.fillStyle = `rgba(255,255,255,${0.6 * H.labels * H.a})`;
-					hc.fillText(`ROT ${String(deg).padStart(3, "0")}°`, cx + half + 12, cy - half + 8);
-					hc.fillText(`SCALE ${(intro.s || 1).toFixed(2)}×`, cx + half + 12, cy - half + 24);
-					hc.fillText(`REFR ${(fluteMat.uniforms.uShift.value / DPR).toFixed(1)}PX`, cx - half - 92, cy + half - 8);
-				}
-			};
-			const tick3 = () => {
-				const ms = performance.now() - t0;
-				tc.textContent = `00:00:${String(Math.floor(ms / 1000)).padStart(2, "0")}:${String(Math.floor((ms / 1000) * 24) % 24).padStart(2, "0")}`;
-				drawHud(ms);
-			};
-			let introTl = null;
-			const finish = () => {
-				intro.done = true;
-				intro.px = intro.py = 0;
-				stage.last = clock.getElapsedTime();
-				fluteMat.uniforms.uSweep.value = 999;
-				fluteMat.uniforms.uShift.value = fluteTarget.s;
-				fluteMat.uniforms.uShiftT.value = fluteTarget.t;
-				gsap.ticker.remove(tick3);
-				box.remove();
-				css.remove();
-			};
-			introStart = () => {
-				gsap.ticker.add(tick3);
-				introTl = gsap.timeline({ onComplete: finish });
-				introTl.timeScale(0.7); // 인트로 전체 속도 (1 = 원래, 낮을수록 느림)
-				const blk = $(".i3-black");
-				// 건축 영상처럼: 도형의 한 부분을 아주 크게 잡은 디테일 컷 → 컷 안에서 천천히 흐름 → 검은 화면으로 짧게 끊고 다음 부분
-				// (lx, ly) = 화면 가운데에 올 도형 위 지점(로컬 좌표), s = 확대 배율
-				const SHOTS = [
-					{ lx: 1.4, ly: 1.4, s: 6.5, rx: 0.2, ry: -1.2, dx: -0.25, dry: 0.15 }, // 바깥 모서리
-					{ lx: 0.0, ly: -1.15, s: 7.0, rx: 0.9, ry: -0.2, dx: 0.3, dry: -0.12 }, // 구멍 아래쪽 가장자리
-					{ lx: -1.48, ly: 0.3, s: 5.5, rx: -0.2, ry: -1.6, dx: 0.2, dry: 0.18 }, // 옆면
-					{ lx: 0.6, ly: 1.3, s: 6.0, rx: 0.5, ry: -0.8, dx: -0.2, dry: 0.1 }, // 윗변 + 구멍
-				];
-				const SHOT = 0.95; // 컷 하나 길이(초)
-				introTl.set(intro, { spinOn: false }, 0);
-				SHOTS.forEach((c, n) => {
-					const at = 0.1 + n * SHOT;
-					const set = { s: c.s, px: -c.lx * c.s, py: -c.ly * c.s, rx: c.rx, ry: c.ry };
-					introTl
-						.set(intro, set, at)
-						// 컷 안 카메라 흐름 (천천히 옆으로 + 살짝 돎)
-						.to(intro, { px: set.px + c.dx * c.s * 0.2, ry: c.ry + c.dry, s: c.s * 1.04, duration: SHOT, ease: "sine.inOut" }, at);
-					// 컷 사이: 검은 화면으로 짧게 끊음 (첫 컷은 검은 화면이 걷히며 시작)
-					if (n === 0) introTl.to(blk, { autoAlpha: 0, duration: 0.5, ease: "power2.out" }, at);
-					else introTl.fromTo(blk, { autoAlpha: 1 }, { autoAlpha: 0, duration: 0.22, ease: "power2.out" }, at);
-					if (n < SHOTS.length - 1) introTl.to(blk, { autoAlpha: 1, duration: 0.1, ease: "power1.in" }, at + SHOT - 0.1);
-				});
-				const T = 0.1 + SHOTS.length * SHOT - 0.35; // 마지막 컷 끝나기 조금 전부터 줌아웃 (컷 → 롱테이크로 이어짐)
-				introTl
-					.to($(".i3-cap"), { autoAlpha: 0.56, duration: 0.8, ease: "power2.out", stagger: 0.1 }, 0.4)
-					// 모션 그래픽 HUD: 프레임·점·눈금·펄스·수치
-					.set(H, { a: 1 }, 0.3)
-					.to(H, { frame: 1, duration: 0.6, ease: "back.out(2)" }, 0.5)
-					.to(H, { dots: 1, duration: 0.5, ease: "none" }, 0.65)
-					.to(H, { ruler: 1, duration: 0.6, ease: "power2.out" }, 0.8)
-					.to(H, { rings: 1, duration: 0.4, ease: "none" }, 1.0)
-					.to(H, { labels: 1, duration: 0.4, ease: "none" }, 1.2)
-					// 롱테이크 줌아웃: 디테일에서 천천히 돌며 빠져나와 전체가 보임
-					.add(() => (intro.spinOn = true), T)
-					.to(intro, { s: 1, px: 0, py: 0, rx: 0.4, ry: -0.55, duration: 3.0, ease: "power2.inOut" }, T)
-					.to(fluteMat.uniforms.uShift, { value: fluteTarget.s, duration: 2.6, ease: "power2.inOut" }, T + 0.2)
-					// HUD는 도형 쪽으로 접히며 사라짐
-					.to(H, { rings: 0, labels: 0, ruler: 0, dots: 0, duration: 0.4, ease: "power2.in" }, T + 2.4)
-					.to(H, { collapse: 1, duration: 0.5, ease: "power3.in" }, T + 2.5)
-					.to(H, { a: 0, duration: 0.2, ease: "none" }, T + 2.9)
-					// 다 보이면 은은하게 빛나고 칸막이가 가운데 열부터 끼워짐
-					.add(() => gsap.fromTo(flash, { value: 0.3 }, { value: 0, duration: 1.4, ease: "power2.out" }), T + 3.0)
-					.set(fluteMat.uniforms.uSweep, { value: 0 }, T + 3.0)
-					.to(fluteMat.uniforms.uSweep, { value: colsMax, duration: 1.4, ease: "power2.inOut" }, T + 3.0)
-					.to(fluteMat.uniforms.uShiftT, { value: fluteTarget.t, duration: 1.2, ease: "power2.out" }, T + 3.2)
-					.to(intro, { face: 0, duration: 2.2, ease: "power2.inOut" }, T + 3.2)
-					.to($(".i3-cap"), { autoAlpha: 0, duration: 0.6, ease: "power2.in" }, T + 3.2)
-					// 진짜 타이틀(캔버스) → 헤더
-					.add(() => {
-						if (!titleOut) gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
-					}, T + 3.5)
-					.to(hdr, { autoAlpha: 1, y: 0, duration: 0.8, ease: "power3.out", stagger: 0.06 }, T + 3.9);
-			};
-			window.addEventListener("click", () => {
-				if (introTl && !intro.done) introTl.progress(1);
-			});
-		} else {
-			// ───────── 인트로 2: 지금 비주얼과 같은 재료로 만든 로딩 ─────────
-			//   해외 스튜디오 포트폴리오(lusion.co, locomotive.ca 등)의 '큰 카운터 + 진행선 로더 → 장면 공개' 구성을 이 비주얼에 맞게 바꿈
-			//   1) 로딩: 0 → 100%를 4·8의 배수로 셈 — 가운데 유리 너트가 진행에 맞춰 4 → 6 → 8 → … → 40각 → 원 → 4각으로 부드럽게 변형
-			//            진행선은 칸막이 골과 같은 40px 눈금 위를 채워 감
-			//   2) 공개: ○까지 차면 다시 04(사각)로 돌아오며 커지고, 격자 유리 칸막이가 가운데 열부터 바깥으로 한 열씩 끼워짐
-			//   3) 타이틀 → 헤더 → 평소처럼 3초마다 변형
-			reveal.value = 999;
-			intro.s = 0.5; // 로딩 중엔 작게
-			intro.rx = 0.4;
-			intro.ry = -0.55;
-			intro.face = 1;
-			intro.spinOn = true; // 처음부터 천천히 돎
-			intro.lm = 0; // 로딩 중 도형 변형 진행 (0 = 4각, 1 = 6각, 2 = 8각, 3 = 다시 4각)
-			fluteMat.uniforms.uSweep.value = 0;
-			fluteMat.uniforms.uShift.value = fluteTarget.s; // 칸막이 세기는 미리 두고, 스윕으로 열마다 끼움
-			fluteMat.uniforms.uShiftT.value = fluteTarget.t;
-			// 퍼센트는 8px 그리드처럼 4·8의 배수로만 올라감
-			const PCT = [0, 4, 8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 100];
-			const font = `"${CFG.fontFamily}", "Unbounded", sans-serif`;
-			// 메인 타이틀과 같은 글자 크기: 1024px 초과는 textSize(px), 이하는 textSizeM(vw), 480px 이하 덮어쓰기
-			const vw2 = window.innerWidth;
-			const r480b = (CFG.responsive || {})[480] || {};
-			const fsT = vw2 <= 480 && r480b.textSizeM ? (vw2 * r480b.textSizeM) / 100 : vw2 <= 1024 ? (vw2 * CFG.textSizeM) / 100 : CFG.textSize;
-			const box = document.createElement("div");
-			box.className = "intro2";
-			box.innerHTML = `
-				<div class="i2-meta"><span class="i2-count"><span class="i2-num"><span class="i2-d"><b>0</b></span><span class="i2-d"><b>0</b></span><span class="i2-d"><b>0</b></span></span><span class="i2-pct">%</span></span><span>Loading</span></div>
-				<div class="i2-bar"><i></i></div>
-`;
-			const css = document.createElement("style");
-			css.textContent = `
-				.intro2 { position: fixed; inset: 0; z-index: 60; pointer-events: none; color: #fff; font-family: ${font}; }
-				.intro2 { --side: 80px; --bot: 40px; --gap: 40px; } /* --bot: 로딩 선 아래 간격, --gap: 숫자와 선 사이 간격 */
-				@media (max-width: 1660px) { .intro2 { --side: 40px; } }
-				@media (max-width: 768px) { .intro2 { --side: 20px; } }
-				.intro2 .i2-meta { position: absolute; left: var(--side); right: var(--side); bottom: calc(var(--bot) + 1px + var(--gap)); display: flex; justify-content: space-between; font-size: 12px; line-height: 16px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.56; }
-				.intro2 .i2-bar { position: absolute; left: var(--side); right: var(--side); bottom: var(--bot); height: 1px; background: rgba(255,255,255,0.1); overflow: hidden; }
-				.intro2 .i2-bar i { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background: #fff; transform-origin: 0 50%; transform: scaleX(0); }
-				.intro2 .i2-meta { align-items: flex-end; opacity: 1; font-weight: 100; }
-				.intro2 .i2-meta > span:last-child { opacity: 0.3; }
-				/* 퍼센트 숫자: 메인 타이틀(DETAIL ORIENTED.)과 같은 크기·굵기 */
-				.intro2 .i2-count { font-size: ${Math.round(fsT * 2 / 3)}px; line-height: 1; font-weight: 100; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
-				.intro2 .i2-num { opacity: 1; color: #fff; font-weight: 900; }
-				.intro2 .i2-pct { opacity: 0.3; font-size: 12px; line-height: 16px; letter-spacing: 0.08em; margin-left: 4px; }
-				/* 숫자 롤링: 자리마다 바뀔 때 아래에서 위로 올라옴 */
-				.intro2 .i2-d { position: relative; display: inline-block; overflow: hidden; vertical-align: bottom; }
-				.intro2 .i2-d b { display: block; font-weight: inherit; }
-				.intro2 .i2-d b + b { position: absolute; left: 0; top: 0; }
-`;
-			document.head.appendChild(css);
-			document.body.appendChild(box);
-			const $ = (q) => box.querySelector(q);
-			const num = $(".i2-num"),
-				bar = $(".i2-bar i");
-			// 글자 실제 아랫선(베이스라인)이 선에서 정확히 --gap(40px) 위에 오도록 줄 높이 여백만큼 내림
-			const fitBase = () => {
-				const cx = document.createElement("canvas").getContext("2d");
-				const off = (el, w, fs, lh) => {
-					cx.font = `${w} ${fs}px ${font}`;
-					const m = cx.measureText("0");
-					if (!m.fontBoundingBoxAscent) return 0;
-					return (lh - m.fontBoundingBoxAscent + m.fontBoundingBoxDescent) / 2;
-				};
-				const cfs = Math.round((fsT * 2) / 3);
-				$(".i2-count").style.marginBottom = -off(null, 900, cfs, cfs) + "px";
-				$(".i2-meta > span:last-child").style.marginBottom = -off(null, 100, 12, 16) + "px";
-			};
-			fitBase();
-			if (document.fonts) document.fonts.ready.then(fitBase);
-			const slots = [...box.querySelectorAll(".i2-d")];
-			let numStr = "000";
-			const setNum = (str) => {
-				if (str === numStr) return;
-				slots.forEach((slot, i) => {
-					if (str[i] === numStr[i]) return;
-					// 이전 롤링이 남아 있으면 즉시 마무리
-					if (slot._tl) slot._tl.progress(1);
-					const old = slot.firstElementChild;
-					const nu = document.createElement("b");
-					nu.textContent = str[i];
-					slot.appendChild(nu);
-					slot._tl = gsap
-						.timeline({
-							onComplete() {
-								old.remove();
-								gsap.set(nu, { clearProps: "all" });
-								slot._tl = null;
-							},
-						})
-						.to(old, { yPercent: -100, duration: 0.5, ease: "power3.out" }, i * 0.04)
-						.fromTo(nu, { yPercent: 100 }, { yPercent: 0, duration: 0.5, ease: "power3.out" }, i * 0.04);
-				});
-				numStr = str;
-			};
-			const colsMax = Math.ceil(window.innerWidth / 2 / (CFG.fx.fluteWidth || 40)) + 2;
-			const load = { p: 0 };
-			let introTl = null;
-			const finish = () => {
-				intro.done = true;
-				intro.lm = -1;
-				// 로딩이 4각으로 끝났으니 평소 변형은 4각 → 6각부터 이어서
-				stage.from = 0;
-				stage.to = 1;
-				stage.start = -1;
-				stage.last = clock.getElapsedTime();
-				curFrom = -1;
-				fluteMat.uniforms.uSweep.value = 999;
-				box.remove();
-				css.remove();
-			};
-			introStart = () => {
-				introTl = gsap.timeline({ onComplete: finish });
-				introTl.timeScale(0.7); // 인트로 전체 속도 (1 = 원래, 낮을수록 느림)
-				introTl
-					.from([$(".i2-meta"), $(".i2-bar")], { y: 16, autoAlpha: 0, duration: 0.5, ease: "power3.out", stagger: 0.06 }, 0.1)
-					// 1) 로딩: 0 → 100% (4·8의 배수 단계로 숫자가 바뀜) — 도형은 진행에 맞춰 4각 → … → 원 → 4각으로 부드럽게 이어서 변형
-					.to(load, {
-						p: 1,
-						duration: 3.2,
-						ease: "power1.inOut",
-						onUpdate() {
-							intro.lm = load.p * SHAPES.length;
-							setNum(String(PCT[Math.min(PCT.length - 1, Math.floor(load.p * (PCT.length - 1) + 0.0001))]).padStart(3, "0"));
-							bar.style.transform = `scaleX(${load.p})`;
-						},
-					}, 0.3)
-					// 2) 공개: 글자 빠지고, 도형이 커지며 칸막이가 가운데 열부터 한 열씩 끼워짐
-					.to([$(".i2-meta"), $(".i2-bar")], { y: -16, autoAlpha: 0, duration: 0.7, ease: "power2.inOut", stagger: 0.06 }, 3.4)
-					.add(() => gsap.fromTo(flash, { value: 0.35 }, { value: 0, duration: 1.6, ease: "power2.out" }), 3.6)
-					.to(intro, { s: 1, duration: 2.0, ease: "power3.inOut" }, 3.4)
-					.to(fluteMat.uniforms.uSweep, { value: colsMax, duration: 1.6, ease: "power2.inOut" }, 3.6)
-					.to(intro, { face: 0, duration: 2.6, ease: "power3.inOut" }, 3.8)
-					// 3) 타이틀 → 헤더
-					.add(() => {
-						if (!titleOut) gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
-					}, 4.6)
-					.to(hdr, { autoAlpha: 1, y: 0, duration: 0.8, ease: "power3.out", stagger: 0.06 }, 5.0);
-			};
-			window.addEventListener("click", () => {
-				if (introTl && !intro.done) introTl.progress(1);
-			});
-		}
+			box.remove();
+			css.remove();
+		};
+		introStart = () => {
+			tl = gsap.timeline({ onComplete: finish }).timeScale(CFG.introSpeed);
+			tl.from(loader, { y: 16, autoAlpha: 0, duration: 0.5, ease: "power3.out", stagger: 0.06 }, 0.1)
+				// 1) 로딩
+				.to(load, {
+					p: 1,
+					duration: 3.2,
+					ease: "power1.inOut",
+					onUpdate() {
+						intro.lm = load.p * SHAPES.length;
+						setNum(String(PCT[Math.floor(load.p * (PCT.length - 1) + 1e-4)]).padStart(3, "0"));
+						bar.style.transform = `scaleX(${load.p})`;
+					},
+				}, 0.3)
+				// 2) 공개
+				.to(loader, { y: -16, autoAlpha: 0, duration: 0.7, ease: "power2.inOut", stagger: 0.06 }, 3.4)
+				.to(intro, { s: 1, duration: 2.0, ease: "power3.inOut" }, 3.4)
+				.add(() => gsap.fromTo(flash, { value: 0.35 }, { value: 0, duration: 1.6, ease: "power2.out" }), 3.6)
+				.to(fluteMat.uniforms.uSweep, { value: colsMax, duration: 1.6, ease: "power2.inOut" }, 3.6)
+				.to(intro, { face: 0, duration: 2.6, ease: "power3.inOut" }, 3.8)
+				// 3) 타이틀 → 헤더
+				.add(() => !titleOut && showChars(titleFlat, 0), 4.6)
+				.to(hdr, { autoAlpha: 1, y: 0, duration: 0.8, ease: "power3.out", stagger: 0.06 }, 5.0);
+		};
+		window.addEventListener("click", () => tl && !intro.done && tl.progress(1));
 	} else {
-		titleFlat.forEach((o) => (o.v = 0));
-		drawTitle(W, H);
-		document.documentElement.classList.remove("intro-pending");
+		root.classList.remove("intro-pending");
 	}
-	// 2) 렌즈: 캔버스 안에 마우스가 있을 때만 켜짐
-	const lensP = { x: glowT.x, y: glowT.y };
-	let lensOn = false;
-	const LENS = FXON && !MOBILE ? FX.lens : 0;
-	window.addEventListener("pointermove", (e) => {
-		const r = wrap.getBoundingClientRect();
-		lensOn = e.pointerType === "mouse" && e.clientY >= r.top && e.clientY <= r.bottom && !isUI(e);
-	});
-	document.addEventListener("mouseleave", () => (lensOn = false));
-	// 3) 클릭 파동 (도형 변형 클릭과 함께 동작)
-	let ripStart = -99;
-	window.addEventListener("click", (e) => {
-		if (!FXON || !FX.ripple || isUI(e)) return;
-		const r = wrap.getBoundingClientRect();
-		if (e.clientY < r.top || e.clientY > r.bottom) return;
-		rip.value.x = (e.clientX - r.left) * DPR;
-		rip.value.y = (r.bottom - e.clientY) * DPR;
-		ripStart = clock.getElapsedTime();
-	});
-	// 4) 스크롤: 캔버스는 화면에 고정, 페이지 스크롤 양(화면 높이 단위)과 속도만 읽음
-	//    0 = 맨 위, 1 = 프로젝트 섹션이 화면을 덮은 시점, 그 뒤로도 계속 증가
-	const scr = { t: 0, p: 0, v: 0, vs: 0, last: window.scrollY };
-	// 일정 이상 스크롤하면: 타이틀 글자들이 위로 회전하며 빠지고 → PROJECT 글자들이 아래에서 회전하며 올라옴
-	// 다시 올리면 반대로 (PROJECT 아래로 빠짐 → 타이틀이 위에서 내려옴)
-	let titleOut = false;
+
+	/* ───────── 7. 스크롤 ─────────
+	   캔버스는 화면에 고정, 스크롤 양(화면 높이 단위)만 읽음
+	   0.12화면↓ 타이틀 빠지고 PROJECT 올라옴 / 1.6화면↓ PROJECT도 빠짐 (다시 올리면 반대로) */
+	const scr = { t: 0, p: 0 };
+	let projOut = false;
 	function setTitleOut(o) {
-		if (o === titleOut || !window.gsap) return;
+		if (o === titleOut || !HAS_GSAP) return;
 		titleOut = o;
 		gsap.killTweensOf(titleFlat);
 		gsap.killTweensOf(projChars);
 		if (o) {
-			gsap.to(titleFlat, { v: 1, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
-			gsap.to(projChars, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, delay: 0.3, onUpdate: markDirty });
+			showChars(titleFlat, 1);
+			showChars(projChars, 0, 0.3);
 		} else {
-			gsap.to(projChars, { v: -1, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
-			gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, delay: 0.2, onUpdate: markDirty });
+			showChars(projChars, -1);
+			showChars(titleFlat, 0, 0.2);
 		}
 	}
-	// 카드가 올라오면(1.6화면) PROJECT도 등장과 같은 글자 효과로 위로 빠지고, 다시 올리면(1.5화면 미만) 위에서 내려옴
-	let projOut = false;
 	function setProjOut(o) {
-		if (o === projOut || !window.gsap) return;
+		if (o === projOut || !HAS_GSAP) return;
 		projOut = o;
 		gsap.killTweensOf(projChars);
-		gsap.to(projChars, { v: o ? 1 : 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
+		showChars(projChars, o ? 1 : 0);
 	}
-	const checkTitle = (t) => {
-		if (t > 0.12) setTitleOut(true);
-		else if (t < 0.06) {
+	function onScroll() {
+		scr.t = window.scrollY / (window.innerHeight || 1);
+		if (scr.t > 0.12) setTitleOut(true);
+		else if (scr.t < 0.06) {
 			projOut = false;
 			setTitleOut(false);
 		}
 		if (titleOut) {
-			if (t > 1.6) setProjOut(true);
-			else if (t < 1.5) setProjOut(false);
+			if (scr.t > 1.6) setProjOut(true);
+			else if (scr.t < 1.5) setProjOut(false);
 		}
-	};
-	if (FX.scroll && FXON) {
-		document.documentElement.classList.add("has-proj-fx"); // 캔버스가 PROJECT를 그리므로 DOM 제목은 CSS로 숨김
-		window.addEventListener(
-			"scroll",
-			() => {
-				const y = window.scrollY;
-				scr.t = y / (window.innerHeight || 1);
-				checkTitle(scr.t);
-				scr.v = Math.min(1, scr.v + Math.abs(y - scr.last) / 400);
-				scr.last = y;
-			},
-			{ passive: true },
-		);
 	}
-	// 새로고침 시 스크롤이 내려가 있으면 바로 PROJECT 상태로
-	if (FX.scroll && FXON) {
-		scr.t = window.scrollY / (window.innerHeight || 1);
-		checkTitle(scr.t);
+	if (!reduce) {
+		root.classList.add("has-proj-fx"); // PROJECT는 캔버스가 그리므로 DOM 제목은 CSS로 숨김
+		window.addEventListener("scroll", onScroll, { passive: true });
+		onScroll(); // 새로고침 시 내려가 있으면 바로 그 상태로
 	}
-	const par = { x: 0, y: 0 };
-	const qFx = new THREE.Quaternion(),
-		eFx = new THREE.Euler();
 
-	let visible = true;
-	new IntersectionObserver(([en]) => {
-		visible = en.isIntersecting;
-	}).observe(wrap);
-
-	// [TEST] 인트로 동안 스크롤 잠금 (test.html의 html.intro-lock) → 인트로 끝나면 해제
-	// 스크롤바는 숨기지 않고, 휠·터치·키 입력만 막음 (스크롤바를 끌어도 맨 위로 되돌림)
-	let scrollLock = document.documentElement.classList.contains("intro-lock"),
-		lenisReset = false;
+	// 인트로 동안 스크롤 잠금 (html.intro-lock): 스크롤바는 그대로 두고 휠·터치·키만 막음, 스크롤바를 끌어도 맨 위로
+	let scrollLock = root.classList.contains("intro-lock");
+	const LOCK_EVENTS = ["wheel", "touchmove", "keydown"];
 	const SCROLL_KEYS = ["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " ", "Spacebar"];
 	const blockScroll = (e) => {
-		if (!scrollLock) return;
 		if (e.type === "keydown" && !SCROLL_KEYS.includes(e.key)) return;
 		e.preventDefault();
 		e.stopPropagation(); // Lenis까지 안 가게
 	};
-	const keepTop = () => {
-		if (scrollLock && window.scrollY) window.scrollTo(0, 0);
-	};
+	const keepTop = () => window.scrollY && window.scrollTo(0, 0);
 	if (scrollLock) {
-		["wheel", "touchmove", "keydown"].forEach((ev) => window.addEventListener(ev, blockScroll, { capture: true, passive: false }));
+		LOCK_EVENTS.forEach((ev) => window.addEventListener(ev, blockScroll, { capture: true, passive: false }));
 		window.addEventListener("scroll", keepTop, { passive: true });
-		window.scrollTo(0, 0);
-	}
-	function lockTick() {
-		if (!scrollLock) return;
-		if (!introStart || intro.done) {
-			scrollLock = false;
-			document.documentElement.classList.remove("intro-lock");
-			["wheel", "touchmove", "keydown"].forEach((ev) => window.removeEventListener(ev, blockScroll, { capture: true }));
-			window.removeEventListener("scroll", keepTop);
-			if (window.lenis) window.lenis.scrollTo(0, { immediate: true, force: true });
-			if (window.ScrollTrigger) ScrollTrigger.refresh();
-			return;
-		}
-		if (window.lenis && !lenisReset) {
-			window.lenis.scrollTo(0, { immediate: true, force: true });
-			lenisReset = true;
-		}
 		keepTop();
 	}
+	function unlockScroll() {
+		scrollLock = false;
+		root.classList.remove("intro-lock");
+		LOCK_EVENTS.forEach((ev) => window.removeEventListener(ev, blockScroll, { capture: true }));
+		window.removeEventListener("scroll", keepTop);
+		if (window.lenis) window.lenis.scrollTo(0, { immediate: true, force: true });
+		if (window.ScrollTrigger) ScrollTrigger.refresh();
+	}
+
+	/* ───────── 8. 매 프레임 ───────── */
+	const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+	function stageAt(t) {
+		if (stage.start < 0) return { from: stage.from, to: stage.to, u: 0 };
+		const c = (t - stage.start) / CFG.morph;
+		if (c < 1) return { from: stage.from, to: stage.to, u: ease(c) };
+		// 변형 완료 → 다음 쌍 준비
+		stage.from = stage.to;
+		stage.to = (stage.to + 1) % SHAPES.length;
+		stage.start = -1;
+		return { from: stage.from, to: stage.to, u: 0 };
+	}
+	const mo = reduce ? 0 : 1; // 움직임 줄이기 설정이면 0
+	const kick = { from: -1, acc: 0, amt: 0 }; // 변형할 때 정면 축으로 한 칸(다음 도형 꼭짓점 간격) 도는 각도
+	const qA = new THREE.Quaternion(),
+		qB = new THREE.Quaternion(),
+		qFx = new THREE.Quaternion();
+	const eA = new THREE.Euler(),
+		eB = new THREE.Euler(),
+		eFx = new THREE.Euler();
+	let spinAcc = 0,
+		lastT = 0,
+		frame = 0,
+		visible = true;
+	new IntersectionObserver(([en]) => (visible = en.isIntersecting)).observe(wrap);
 
 	function tick() {
 		requestAnimationFrame(tick);
-		lockTick();
+		if (scrollLock) intro.done ? unlockScroll() : keepTop();
 		if (!visible) return;
-		if (introStart && ++frame === 3) introStart(); // [TEST]
+		if (introStart && ++frame === 3) introStart(); // 셰이더 컴파일 멈칫 뒤에 시작
 		const t = clock.getElapsedTime();
-		const m = reduce ? 0 : 1;
-		const ge = reduce ? 1 : CFG.bgGlowEase;
-		glowP.x += (glowT.x - glowP.x) * ge;
-		glowP.y += (glowT.y - glowP.y) * ge;
-		glow.value.set(glowP.x * DPR, (H - glowP.y) * DPR);
 
-		// [TEST] 자동 변형: 대기 시간이 지나면 다음 도형으로 (드래그 중·인트로 중엔 기다림, 클릭하면 타이머 초기화)
-		if (stage.last === undefined) stage.last = t; // 마지막 변형 시작 시점 (클릭으로 시작해도 갱신)
-		if (stage.start >= 0 && stage.start !== stage.last) stage.last = stage.start;
-		if (!reduce && FX.autoMorph > 0 && stage.start < 0 && !drag.on && intro.done && (FX.flow || t - stage.last >= FX.autoMorph)) stage.start = stage.last = t; // flow면 끝나자마자 다음
-		let st = reduce ? { from: START, to: (START + 1) % SHAPES.length, u: 0 } : stageAt(t);
+		// 변형: 인트로 중엔 로딩 진행(lm)을 따르고, 끝나면 autoMorph초마다 다음 도형으로
+		if (!reduce && intro.done && stage.start < 0 && !drag.on && t - stage.last >= CFG.autoMorph) stage.start = stage.last = t;
+		let st = stageAt(t);
 		if (intro.lm >= 0) {
-			// [TEST] 인트로 2: 로딩 카운터에 맞춰 도형이 4각 → … → 원 → 4각으로 빠르게 변형
 			const f = Math.min(SHAPES.length - 1, Math.floor(intro.lm));
 			st = { from: f, to: (f + 1) % SHAPES.length, u: Math.min(1, intro.lm - f) };
 		}
@@ -1715,95 +808,47 @@
 		}
 		const u = st.u;
 		morph.value = u;
-		// 변형 중간(u = 0.5)에 가장 많이 조각남, 시작·끝에는 0
-		shatter.value = intro.done ? Math.sin(u * Math.PI) * CFG.shatter.amount : intro.shatter;
-		// [TEST] 마우스를 빠르게 움직이면 에너지가 쌓여 도형이 살짝 흩어졌다 다시 모임 (인트로 중엔 크게)
-		const mdx = mouse.x - (intro.mx ?? mouse.x),
-			mdy = mouse.y - (intro.my ?? mouse.y);
-		intro.mx = mouse.x;
-		intro.my = mouse.y;
-		intro.energy = Math.min(1, intro.energy * 0.93 + Math.hypot(mdx, mdy) * (intro.done ? 0.6 : 2.0) * m);
-		explode.value = intro.explode + intro.energy * (intro.done ? 0.12 : 0.45);
-		uTimeU.value = t;
-		mouseL.value.x += (mouse.x * 1.2 - mouseL.value.x) * 0.06;
-		mouseL.value.y += (-mouse.y * 1.2 - mouseL.value.y) * 0.06;
-		clear.value = CLEAR[st.from] + (CLEAR[st.to] - CLEAR[st.from]) * u;
-
-		tilt.x += (mouse.y * 0.25 - tilt.x) * 0.05;
-		tilt.z += (mouse.x * -0.15 - tilt.z) * 0.05;
-		const sway = Math.sin(t * 0.4) * m,
-			spin = t * 0.25 * m;
-
-		// 도형별 자세
-		// 모든 도형 같은 자세 (너트) + 마우스 기울기
-		const pose = [0.42 + sway * 0.12 + tilt.x, -0.35 + Math.sin(t * 0.27) * 0.25 * m + mouse.x * 0.45, -0.12 + Math.sin(t * 0.2) * 0.05 * m];
-		// [TEST] 변형 모션: 자연스럽게(이징) + 인터랙티브하게
-		//   - 변형하는 동안 면 쪽 축으로 한 칸(다음 도형 꼭짓점 간격만큼) 돌며 꼭짓점이 늘어남, 방향은 마우스 좌우 쪽
-		//   - 마우스가 멀수록 크게 돌고, 중간에 마우스 위아래 쪽으로 살짝 젖혀졌다 돌아옴 + 숨 쉬듯 커졌다 돌아옴
 		if (st.from !== kick.from) {
 			kick.acc += kick.amt; // 끝난 변형만큼 누적 (자세가 튀지 않게)
 			kick.amt = 0;
 			kick.from = st.from;
 		}
-		if (u > 0 && kick.amt === 0) {
-			kick.dir = mouse.x < -0.05 ? -1 : 1;
-			kick.amt = ((Math.PI * 2) / (SIDES[st.to] || 48)) * kick.dir * (1 + Math.abs(mouse.x) * 0.8);
-			kick.tiltDir = mouse.y < 0 ? -1 : 1;
-		}
-		const bump = Math.sin(u * Math.PI) * (FX.flow ? 0.35 : 1); // flow일 때는 단계마다 출렁임을 약하게
-		eA.set(pose[0] + bump * 0.35 * kick.tiltDir * m, pose[1], pose[2]);
+		if (u > 0 && kick.amt === 0) kick.amt = (Math.PI * 2) / SIDES[st.to];
+		const bump = Math.sin(u * Math.PI); // 변형 중간에 최대
+
+		// 자세: 기본 흔들림 + 변형 중 살짝 젖힘 → (인트로 자세) → 정면 축 회전 → 드래그 → 스크롤·계속 회전
+		eA.set(0.42 + (Math.sin(t * 0.4) * 0.12 + bump * 0.35) * mo, -0.35 + Math.sin(t * 0.27) * 0.25 * mo, -0.12 + Math.sin(t * 0.2) * 0.05 * mo);
 		prism.quaternion.setFromEuler(eA);
 		if (intro.face > 0) {
 			eB.set(intro.rx, intro.ry, 0);
 			qB.setFromEuler(eB);
-			prism.quaternion.slerp(qB, intro.face); // [TEST] 인트로: 정면 → 기울기 → 옆면 '샥' → 평소 자세
+			prism.quaternion.slerp(qB, intro.face);
 		}
-		qA.setFromAxisAngle(AZ, (kick.acc + kick.amt * u) * m); // 너트 면(정면) 축으로 회전
+		qA.setFromAxisAngle(AZ, (kick.acc + kick.amt * u) * mo);
 		prism.quaternion.multiply(qA);
-		fluteMat.uniforms.uBloom.value = CFG.bloom * (1 + bump * 0.8 + flash.value * 2.0); // 변형 중·완성 순간 빛 번짐 커짐
-		// 드래그 회전 + 관성
 		if (!drag.on && (Math.abs(drag.vx) > 1e-5 || Math.abs(drag.vy) > 1e-5)) {
 			spinBy(drag.vx, drag.vy);
 			drag.vx *= CFG.dragInertia;
 			drag.vy *= CFG.dragInertia;
 		}
 		prism.quaternion.premultiply(qUser);
-
-		// [TEST] 스크롤 진행도·속도 (부드럽게 따라감)
 		scr.p += (scr.t - scr.p) * 0.2;
-		scr.vs += (scr.v - scr.vs) * 0.08;
-		scr.v *= 0.92; // 스크롤 멈추면 속도 감소
-		const sp = Math.min(1, scr.p); // 첫 화면 구간(0~1)
-		// 스크롤 + 인트로 회전 (프로젝트를 내리는 동안에도 계속 천천히 돎)
-		intro.spinAcc = (intro.spinAcc || 0) + (t - (intro.lastT ?? t)) * (intro.spinOn ? 1 : 1 - intro.face); // 인트로: 도형이 나온 뒤부터 계속 돎 // 정면 고정 중엔 회전 멈춤
-		intro.lastT = t;
-		eFx.set(sp * 0.6 + scr.p * 0.25, scr.p * Math.PI * 0.6 + intro.spin + intro.spinAcc * FX.spin * m, intro.spin * 0.3); // + 계속 회전 (인트로 끝난 뒤부터)
+		spinAcc += t - lastT;
+		lastT = t;
+		eFx.set(Math.min(1, scr.p) * 0.6 + scr.p * 0.25, scr.p * Math.PI * 0.6 + spinAcc * CFG.spin * mo, 0);
 		qFx.setFromEuler(eFx);
 		prism.quaternion.premultiply(qFx);
-		// 마우스 방향으로 따라 움직임 + 스크롤하면 카메라 쪽으로 다가옴
-		par.x += (mouse.x * FX.parallax * m - par.x) * 0.06;
-		par.y += (-mouse.y * FX.parallax * 0.6 * m - par.y) * 0.06;
-		prism.position.set(intro.px || 0, intro.py || 0, 1.2); // [TEST] 화면 정가운데 고정 — 크기는 PROJECT까지 내렸을 때 크기(z 1.2)를 기본으로, 스크롤해도 그대로
-		// 글자 애니메이션 중이면 타이틀·PROJECT 다시 그림
+		prism.position.set(0, 0, 1.2); // 화면 가운데 고정 (z 1.2 = 기본 크기)
+		prism.scale.setScalar((1 + bump * 0.1) * intro.s); // 변형 중 살짝 커졌다 돌아옴
+		fluteMat.uniforms.uBloom.value = CFG.bloom * (1 + bump * 0.8 + flash.value * 2.0);
+
 		if (txtDirty) {
 			txtDirty = false;
 			drawTitle(W, H);
 			drawProj(W, H);
 		}
-		// 스크롤 속도만큼 무지개 번짐
-		backMat.uniforms.uChroma.value = frontMat.uniforms.uChroma.value = CFG.chroma + scr.vs * FX.scrollChroma;
-		// 렌즈 위치·세기
-		lensP.x += (glowT.x - lensP.x) * 0.15;
-		lensP.y += (glowT.y - lensP.y) * 0.15;
-		lensPos.value.set(lensP.x * DPR, (H - lensP.y) * DPR);
-		lensAmt.value += ((lensOn ? LENS : 0) - lensAmt.value) * 0.08;
-		// 파동 경과 시간
-		rip.value.z = Math.min(99, t - ripStart);
 
-		// 변형 중간에 살짝 커졌다 돌아오는 탄성 (+ 인트로 스케일)
-		prism.scale.setScalar((1 + bump * 0.1 + intro.pop * 0.12) * intro.s);
-		prism.scale.z *= intro.depth; // [TEST] 만들어질 때 두께 0 → 1
-
+		// 렌더: 배경 → (배경 + 뒷면) → 앞면만 투명 레이어 → 글자 투명 레이어 → 칸막이로 합성
 		renderer.setRenderTarget(rtBg);
 		renderer.clear();
 		renderer.render(bgScene, orthoCam);
@@ -1813,32 +858,18 @@
 		prism.material = backMat;
 		renderer.render(scene, camera);
 		prism.material = frontMat;
-		const projOn = projChars.some((c) => Math.abs(c.v) < 1); // 보이는 PROJECT 글자가 있을 때만
-		if (FLUTE) {
-			// [TEST] 칸막이: 배경+타이틀 / 도형 / PROJECT를 따로 그려서 각자 세기로 골 유리 굴절 후 합성
-			renderer.setRenderTarget(rtFinal);
-			renderer.clear();
-			renderer.render(bgScene, orthoCam);
-			renderer.setClearAlpha(0);
-			renderer.setRenderTarget(rtGlow);
-			renderer.clear();
-			renderer.render(scene, camera);
-			renderer.setRenderTarget(rtProj); // 글자 레이어 (타이틀 + PROJECT, 도형 앞)
-			renderer.clear();
-			renderer.render(titleScene, orthoCam);
-			if (projOn) renderer.render(projScene, orthoCam);
-			renderer.setClearAlpha(1);
-			renderer.setRenderTarget(null);
-			renderer.clear();
-			renderer.render(fluteScene, orthoCam);
-		} else {
-			renderer.setRenderTarget(null);
-			renderer.clear();
-			renderer.render(bgScene, orthoCam);
-			renderer.render(scene, camera);
-			renderer.render(titleScene, orthoCam);
-			if (projOn) renderer.render(projScene, orthoCam);
-		}
+		renderer.setClearAlpha(0);
+		renderer.setRenderTarget(rtShape);
+		renderer.clear();
+		renderer.render(scene, camera);
+		renderer.setRenderTarget(rtText);
+		renderer.clear();
+		renderer.render(titleScene, orthoCam);
+		if (projChars.some((c) => Math.abs(c.v) < 1)) renderer.render(projScene, orthoCam);
+		renderer.setClearAlpha(1);
+		renderer.setRenderTarget(null);
+		renderer.clear();
+		renderer.render(fluteScene, orthoCam);
 	}
 	tick();
 })();
