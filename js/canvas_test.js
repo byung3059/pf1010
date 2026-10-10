@@ -867,10 +867,11 @@
 			uShiftT: { value: (CFG.fx.fluteText !== undefined ? CFG.fx.fluteText : CFG.fx.flute) * DPR },
 			uBloom: { value: CFG.bloom },
 			uBloomR: { value: 13 * DPR },
+			uSweep: { value: 999 }, // [TEST] 인트로 2: 가운데 열부터 몇 열까지 유리가 끼워졌는지 (999 = 전부)
 		},
 		vertexShader: `void main(){ gl_Position = vec4(position.xy, 0.0, 1.0); }`,
 		fragmentShader: `
-      uniform sampler2D tBase, tGlow, tProj; uniform vec2 uRes; uniform float uW, uShift, uShiftT, uBloom, uBloomR;
+      uniform sampler2D tBase, tGlow, tProj; uniform vec2 uRes; uniform float uW, uShift, uShiftT, uBloom, uBloomR, uSweep;
       // 골 유리 굴절: 골마다 원통 렌즈처럼 밀어 냄 → 경계에서 계단처럼 어긋남 (골 양끝에서 최대 sh px), 대각 3샘플로 살짝 뿌옇게
       vec4 flute(sampler2D t, vec2 p, vec2 b, float sh){
         vec2 uv = (p + b * 2.0 * sh) / uRes;
@@ -881,6 +882,11 @@
         vec2 p = gl_FragCoord.xy;
         // 세로 골 + 가로 골 (격자 유리): 골 안 위치 0~1 → 가운데 0 · 양끝 ±0.5
         vec2 b = vec2(fract(p.x / uW), fract(p.y / uW)) - 0.5;
+        // [TEST] 스윕: 가운데 열에서 먼 열일수록 늦게 유리가 끼워짐 (끼워지는 순간 그 열이 살짝 밝게 스침)
+        float colD = abs(floor(p.x / uW) - floor(uRes.x * 0.5 / uW));
+        float sw = clamp(uSweep - colD, 0.0, 1.0);
+        b *= sw;
+        float swEdge = sw * (1.0 - sw) * 4.0;
         vec4 base = flute(tBase, p, b, uShiftT); // 배경
         vec4 sh = flute(tGlow, p, b, uShift);    // 도형 (프리멀티플라이)
         vec4 pj = flute(tProj, p, b, uShiftT);   // 글자: 타이틀 + PROJECT (프리멀티플라이, 도형 앞)
@@ -899,6 +905,7 @@
           }
           c += bl * uBloom / 24.0;
         }
+        c += swEdge * 0.06; // 끼워지는 열 스침
         gl_FragColor = vec4(c, 1.0);
       }`,
 		depthTest: false,
@@ -1073,7 +1080,7 @@
 		CH_STAG = 1 / 30;
 	const markDirty = () => (txtDirty = true);
 	// 1) 인트로: 타이틀 글자별로 아래에서 회전하며 올라옴 + 도형 스케일/회전 등장
-	const intro = { s: 1, spin: 0, depth: 1, done: true, shatter: 0, explode: 0, pop: 0, energy: 0, face: 0, rx: 0, ry: 0 };
+	const intro = { s: 1, spin: 0, depth: 1, done: true, shatter: 0, explode: 0, pop: 0, energy: 0, face: 0, rx: 0, ry: 0, lm: -1 };
 	let introStart = null,
 		frame = 0;
 	if (FX.intro && FXON && window.gsap) {
@@ -1191,77 +1198,88 @@
 				if (introTl && !intro.done) introTl.progress(1);
 			});
 		} else {
-			// ───────── 인트로 2: 로딩 카운터 → 가로 슬릿이 열리며 장면 등장 ─────────
-			// 해외 포트폴리오(Awwwards 수상작들 — 예: lusion.co, locomotive.ca 같은 스튜디오 사이트)에서 흔한 구성을 참고:
-			//   큰 숫자 로딩 카운터 + 화면을 가로지르는 1px 진행선 → 100이 되면 진행선이 슬릿처럼 위아래로 갈라지며 장면이 열림
-			//   → 그 틈으로 유리 오브젝트가 멀리서 빠르게 돌며 날아와 제자리에 딱 멈춤 → 칸막이 효과 → 타이틀 → 헤더
+			// ───────── 인트로 2: 지금 비주얼과 같은 재료로 만든 로딩 ─────────
+			//   해외 스튜디오 포트폴리오(lusion.co, locomotive.ca 등)의 '큰 카운터 + 진행선 로더 → 장면 공개' 구성을 이 비주얼에 맞게 바꿈
+			//   1) 로딩: 숫자 대신 '각의 수'를 셈 — 04 → 06 → 08 → 12 → 16 → 24 → 32 → 40 → ○ (가운데 유리 너트가 숫자에 맞춰 같이 변형)
+			//            진행선은 칸막이 골과 같은 40px 눈금 위를 채워 감
+			//   2) 공개: ○까지 차면 다시 04(사각)로 돌아오며 커지고, 격자 유리 칸막이가 가운데 열부터 바깥으로 한 열씩 끼워짐
+			//   3) 타이틀 → 헤더 → 평소처럼 3초마다 변형
 			reveal.value = 999;
-			intro.s = 0.18; // 멀리서 작게
-			intro.spin = -4.2; // 빠르게 돌며
+			intro.s = 0.5; // 로딩 중엔 작게
 			intro.rx = 0.4;
 			intro.ry = -0.55;
 			intro.face = 1;
-			intro.spinOn = false;
+			intro.spinOn = true; // 처음부터 천천히 돎
+			intro.lm = 0; // 로딩 중 도형 변형 진행 (0 = 4각, 8 = 원, 9 = 다시 4각)
+			fluteMat.uniforms.uSweep.value = 0;
+			fluteMat.uniforms.uShift.value = fluteTarget.s; // 칸막이 세기는 미리 두고, 스윕으로 열마다 끼움
+			fluteMat.uniforms.uShiftT.value = fluteTarget.t;
+			const LABELS = ["04", "06", "08", "12", "16", "24", "32", "40", "○", "04"];
 			const font = `"${CFG.fontFamily}", "Unbounded", sans-serif`;
 			const box = document.createElement("div");
 			box.className = "intro2";
 			box.innerHTML = `
-				<div class="i2-panel i2-top"></div>
-				<div class="i2-panel i2-bot"></div>
-				<div class="i2-line"></div>
-				<div class="i2-meta"><span>Portfolio</span><span>©2026</span></div>
-				<div class="i2-count"><span class="i2-num">000</span><span class="i2-pct">%</span></div>`;
+				<div class="i2-meta"><span>Detail Oriented</span><span>Sides</span></div>
+				<div class="i2-bar"><i></i></div>
+				<div class="i2-count"><span class="i2-num">04</span></div>`;
 			const css = document.createElement("style");
 			css.textContent = `
 				.intro2 { position: fixed; inset: 0; z-index: 60; pointer-events: none; color: #fff; font-family: ${font}; }
-				.intro2 .i2-panel { position: absolute; left: 0; width: 100%; height: 50%; background: #000; }
-				.intro2 .i2-top { top: 0; }
-				.intro2 .i2-bot { bottom: 0; }
-				.intro2 .i2-line { position: absolute; left: 0; top: 50%; width: 100%; height: 1px; background: #fff; transform-origin: 0 50%; transform: scaleX(0); }
-				.intro2 .i2-meta { position: absolute; left: 40px; right: 40px; top: calc(50% - 32px); display: flex; justify-content: space-between; font-size: 12px; line-height: 16px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.56; }
-				.intro2 .i2-count { position: absolute; right: 40px; bottom: 40px; display: flex; align-items: flex-start; gap: 8px; font-size: clamp(64px, 12vw, 200px); line-height: 0.8; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -0.04em; }
-				.intro2 .i2-pct { font-size: 0.24em; line-height: 1; opacity: 0.56; }
-				@media (max-width: 768px) { .intro2 .i2-meta { left: 16px; right: 16px; } .intro2 .i2-count { right: 16px; bottom: 24px; } }`;
+				.intro2 .i2-meta { position: absolute; left: 40px; right: 40px; bottom: 120px; display: flex; justify-content: space-between; font-size: 12px; line-height: 16px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.56; }
+				.intro2 .i2-bar { position: absolute; left: 40px; right: 40px; bottom: 96px; height: 8px; background: repeating-linear-gradient(90deg, rgba(255,255,255,0.24) 0 1px, transparent 1px 40px); }
+				.intro2 .i2-bar i { position: absolute; left: 0; top: 3px; width: 100%; height: 2px; background: #fff; transform-origin: 0 50%; transform: scaleX(0); }
+				.intro2 .i2-count { position: absolute; right: 40px; top: 40px; font-size: clamp(64px, 10vw, 160px); line-height: 0.8; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -0.04em; }
+				@media (max-width: 768px) { .intro2 .i2-meta, .intro2 .i2-bar { left: 16px; right: 16px; } .intro2 .i2-count { right: 16px; top: 80px; } }`;
 			document.head.appendChild(css);
 			document.body.appendChild(box);
 			const $ = (q) => box.querySelector(q);
-			const num = $(".i2-num");
-			const cnt = { v: 0 };
+			const num = $(".i2-num"),
+				bar = $(".i2-bar i");
+			const colsMax = Math.ceil(window.innerWidth / 2 / (CFG.fx.fluteWidth || 40)) + 2;
 			let introTl = null;
 			const finish = () => {
 				intro.done = true;
+				intro.lm = -1;
+				// 로딩이 4각으로 끝났으니 평소 변형은 4각 → 6각부터 이어서
+				stage.from = 0;
+				stage.to = 1;
+				stage.start = -1;
 				stage.last = clock.getElapsedTime();
+				curFrom = -1;
+				fluteMat.uniforms.uSweep.value = 999;
 				box.remove();
 				css.remove();
 			};
 			introStart = () => {
 				introTl = gsap.timeline({ onComplete: finish });
 				introTl
-					// 1) 카운터 000 → 100 + 진행선 (빠르게 시작해 끝에서 살짝 느려짐, 중간에 한 번 멈칫)
-					.from([$(".i2-meta"), $(".i2-count")], { y: 24, autoAlpha: 0, duration: 0.6, ease: "power3.out", stagger: 0.08 }, 0.1)
-					.to(cnt, { v: 64, duration: 0.9, ease: "power2.in", onUpdate: () => (num.textContent = String(Math.round(cnt.v)).padStart(3, "0")) }, 0.3)
-					.to(cnt, { v: 100, duration: 0.8, ease: "power3.out", onUpdate: () => (num.textContent = String(Math.round(cnt.v)).padStart(3, "0")) }, 1.35)
-					.to($(".i2-line"), { scaleX: 0.64, duration: 0.9, ease: "power2.in" }, 0.3)
-					.to($(".i2-line"), { scaleX: 1, duration: 0.8, ease: "power3.out" }, 1.35)
-					// 2) 숫자·글자가 위로 빠지고, 진행선이 슬릿처럼 위아래로 갈라지며 장면이 열림
-					.to([$(".i2-count"), $(".i2-meta")], { y: -24, autoAlpha: 0, duration: 0.5, ease: "power3.in" }, 2.2)
-					.to($(".i2-line"), { scaleY: 0, duration: 0.6, ease: "expo.inOut" }, 2.55)
-					.to($(".i2-top"), { yPercent: -100, duration: 1.1, ease: "expo.inOut" }, 2.55)
-					.to($(".i2-bot"), { yPercent: 100, duration: 1.1, ease: "expo.inOut" }, 2.55)
-					// 3) 유리 오브젝트가 멀리서 빠르게 돌며 날아와 제자리에 딱 (같은 순간 칸막이 효과도 차오름)
-					.add(() => {
-						intro.spinOn = true;
-						gsap.fromTo(flash, { value: 0.5 }, { value: 0, duration: 1.2, ease: "power2.out" });
-					}, 2.7)
-					.to(intro, { s: 1, spin: 0, duration: 1.8, ease: "expo.out" }, 2.6)
-					.to(intro, { face: 0, duration: 2.0, ease: "expo.out" }, 3.0)
-					.to(fluteMat.uniforms.uShift, { value: fluteTarget.s, duration: 1.2, ease: "power2.out" }, 3.0)
-					.to(fluteMat.uniforms.uShiftT, { value: fluteTarget.t, duration: 1.2, ease: "power2.out" }, 3.0)
-					// 4) 타이틀 → 헤더
+					.from([$(".i2-meta"), $(".i2-bar"), $(".i2-count")], { y: 16, autoAlpha: 0, duration: 0.5, ease: "power3.out", stagger: 0.06 }, 0.1)
+					// 1) 로딩: 각의 수를 세며 도형이 따라 변형 (단계마다 '착' 멈췄다 넘어감)
+					.to(intro, {
+						lm: 9,
+						duration: 2.7,
+						ease: "steps(9)", // 한 칸씩 끊어서 → 아래 onUpdate에서 칸 안을 부드럽게 보간
+						onUpdate() {
+							const p = this.progress() * 9;
+							const k = Math.min(8, Math.floor(p));
+							const fr = p - k;
+							const e = fr < 0.35 ? (fr / 0.35) ** 3 : 1; // 칸 앞부분에서 빠르게 변형 후 멈춤
+							intro.lm = Math.min(9, k + (k < 8 || fr < 1 ? e : 1));
+							num.textContent = LABELS[Math.min(9, Math.round(intro.lm))];
+							bar.style.transform = `scaleX(${Math.min(1, intro.lm / 9)})`;
+						},
+					}, 0.3)
+					// 2) 공개: 글자 빠지고, 도형이 커지며 칸막이가 가운데 열부터 한 열씩 끼워짐
+					.to([$(".i2-count"), $(".i2-meta"), $(".i2-bar")], { y: -16, autoAlpha: 0, duration: 0.45, ease: "power3.in", stagger: 0.04 }, 3.05)
+					.add(() => gsap.fromTo(flash, { value: 0.5 }, { value: 0, duration: 1.2, ease: "power2.out" }), 3.2)
+					.to(intro, { s: 1, duration: 1.4, ease: "expo.out" }, 3.2)
+					.to(fluteMat.uniforms.uSweep, { value: colsMax, duration: 1.1, ease: "power2.inOut" }, 3.25)
+					.to(intro, { face: 0, duration: 2.0, ease: "expo.out" }, 3.5)
+					// 3) 타이틀 → 헤더
 					.add(() => {
 						if (!titleOut) gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
-					}, 3.3)
-					.to(hdr, { autoAlpha: 1, y: 0, duration: 0.6, ease: "power4.out", stagger: 0.05 }, 3.6);
+					}, 3.8)
+					.to(hdr, { autoAlpha: 1, y: 0, duration: 0.6, ease: "power4.out", stagger: 0.05 }, 4.1);
 			};
 			window.addEventListener("click", () => {
 				if (introTl && !intro.done) introTl.progress(1);
@@ -1372,7 +1390,12 @@
 		if (stage.last === undefined) stage.last = t; // 마지막 변형 시작 시점 (클릭으로 시작해도 갱신)
 		if (stage.start >= 0 && stage.start !== stage.last) stage.last = stage.start;
 		if (!reduce && FX.autoMorph > 0 && stage.start < 0 && !drag.on && intro.done && (FX.flow || t - stage.last >= FX.autoMorph)) stage.start = stage.last = t; // flow면 끝나자마자 다음
-		const st = reduce ? { from: START, to: (START + 1) % SHAPES.length, u: 0 } : stageAt(t);
+		let st = reduce ? { from: START, to: (START + 1) % SHAPES.length, u: 0 } : stageAt(t);
+		if (intro.lm >= 0) {
+			// [TEST] 인트로 2: 로딩 카운터에 맞춰 도형이 4각 → … → 원 → 4각으로 빠르게 변형
+			const f = Math.min(SHAPES.length - 1, Math.floor(intro.lm));
+			st = { from: f, to: (f + 1) % SHAPES.length, u: Math.min(1, intro.lm - f) };
+		}
 		if (st.from !== curFrom) {
 			setPair(st.from, st.to);
 			curFrom = st.from;
