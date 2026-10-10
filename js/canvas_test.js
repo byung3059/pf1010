@@ -1200,10 +1200,10 @@
 			});
 		} else if (INTRO === 3) {
 			// ───────── 인트로 3: 모션 영상(티저 필름)처럼 — 빠른 컷 편집 + 키네틱 타이포 + 카메라 무빙 ─────────
-			//   0.0  레터박스(영화 비율 검은 띠) + 화면을 꽉 채우는 'DETAIL' → 'ORIENTED.' 하드 컷 (가로로 번지며 들어옴)
+			//   0.0  메인 타이틀 자리·크기 그대로 'DETAIL' → 'ORIENTED.' 컷 (가로로 번지며 들어옴) + 타임코드
 			//   0.9  유리 너트 초근접 컷 3개 (구도가 툭툭 바뀌며 빠르게 흐름, 칸막이 굴절 과장)
 			//   1.9  각의 수 몽타주: 04 08 16 24 40 ○ 숫자가 컷마다 크게 바뀌고 도형도 같이 변형
-			//   2.8  흰 프레임 플래시 → 카메라가 뒤로 빠지며(줌아웃) 너트가 빠르게 돌다 제자리, 레터박스 열림
+			//   2.8  흰 프레임 플래시 → 카메라가 뒤로 빠지며(줌아웃) 너트가 빠르게 돌다 제자리
 			//   3.6  칸막이가 가운데 열부터 끼워짐 → 타이틀 → 헤더
 			reveal.value = 999;
 			intro.face = 1;
@@ -1219,27 +1219,31 @@
 			box.className = "intro3";
 			box.innerHTML = `
 				<div class="i3-black"></div>
-				<div class="i3-word"></div>
+				<div class="i3-word i3-l1"></div>
+				<div class="i3-word i3-l2"></div>
 				<div class="i3-num"></div>
 				<div class="i3-tc">00:00:00</div>
-				<div class="i3-bar i3-top"></div>
-				<div class="i3-bar i3-bot"></div>
 				<div class="i3-flash"></div>`;
+			// 글자 크기·위치는 메인 타이틀과 같게 (기존 레이아웃 유지): 1024px 초과는 textSize(px), 이하는 textSizeM(vw), 480px 이하 덮어쓰기
+			const vw = window.innerWidth;
+			const r480 = (CFG.responsive || {})[480] || {};
+			const fsT = vw <= 480 && r480.textSizeM ? (vw * r480.textSizeM) / 100 : vw <= 1024 ? (vw * CFG.textSizeM) / 100 : CFG.textSize;
 			const css = document.createElement("style");
 			css.textContent = `
 				.intro3 { position: fixed; inset: 0; z-index: 60; pointer-events: none; color: #fff; font-family: ${font}; overflow: hidden; }
 				.intro3 .i3-black { position: absolute; inset: 0; background: #000; }
-				.intro3 .i3-bar { position: absolute; left: 0; width: 100%; height: 12vh; background: #000; }
-				.intro3 .i3-top { top: 0; }
-				.intro3 .i3-bot { bottom: 0; }
-				.intro3 .i3-word { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 22vw; line-height: 0.8; font-weight: 900; letter-spacing: -0.04em; white-space: nowrap; }
-				.intro3 .i3-num { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 40vh; line-height: 0.8; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -0.04em; mix-blend-mode: difference; }
-				.intro3 .i3-tc { position: absolute; right: 40px; bottom: calc(12vh + 16px); font-size: 12px; line-height: 16px; letter-spacing: 0.08em; font-variant-numeric: tabular-nums; opacity: 0.56; }
+				.intro3 .i3-word { position: absolute; left: 50%; transform: translate(-50%, -50%); font-size: ${fsT}px; line-height: 1; font-weight: ${CFG.textWeight}; text-transform: uppercase; white-space: nowrap; opacity: 0; }
+				.intro3 .i3-l1 { top: calc(50% - ${fsT / 2}px); }
+				.intro3 .i3-l2 { top: calc(50% + ${fsT / 2}px); }
+				.intro3 .i3-num { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: ${fsT}px; line-height: 1; font-weight: ${CFG.textWeight}; font-variant-numeric: tabular-nums; mix-blend-mode: difference; opacity: 0; }
+				.intro3 .i3-tc { position: absolute; right: 40px; bottom: 40px; font-size: 12px; line-height: 16px; letter-spacing: 0.08em; font-variant-numeric: tabular-nums; opacity: 0.56; }
+				@media (max-width: 768px) { .intro3 .i3-tc { right: 16px; bottom: 24px; } }
 				.intro3 .i3-flash { position: absolute; inset: 0; background: #fff; opacity: 0; }`;
 			document.head.appendChild(css);
 			document.body.appendChild(box);
 			const $ = (q) => box.querySelector(q);
-			const word = $(".i3-word"),
+			const w1 = $(".i3-l1"),
+				w2 = $(".i3-l2"),
 				numEl = $(".i3-num"),
 				tc = $(".i3-tc");
 			const colsMax = Math.ceil(window.innerWidth / 2 / (CFG.fx.fluteWidth || 40)) + 2;
@@ -1268,10 +1272,10 @@
 				tc.textContent = `00:00:${String(Math.floor(ms / 1000)).padStart(2, "0")}:${String(f).padStart(2, "0")}`;
 			};
 			// 키네틱 단어 컷: 옆에서 번지며 미끄러져 들어와 딱 멈춤
-			const wordCut = (tl, text, at, from) =>
+			const wordCut = (tl, el, text, at, from) =>
 				tl
-					.set(word, { textContent: text, autoAlpha: 1 }, at)
-					.fromTo(word, { xPercent: -50 + from, filter: "blur(16px)", scaleX: 1.2, autoAlpha: 0 }, { xPercent: -50, filter: "blur(0px)", scaleX: 1, autoAlpha: 1, duration: 0.5, ease: "power3.out" }, at);
+					.set(el, { textContent: text }, at)
+					.fromTo(el, { xPercent: -50 + from, filter: "blur(12px)", autoAlpha: 0 }, { xPercent: -50, filter: "blur(0px)", autoAlpha: 1, duration: 0.5, ease: "power3.out" }, at);
 			// 초근접 컷: 구도를 '툭' 바꾸고 컷 안에서 천천히 흐름
 			const camCut = (tl, at, c) =>
 				tl
@@ -1282,11 +1286,12 @@
 				const tl = (introTl = gsap.timeline({ onComplete: finish }));
 				tl.timeScale(0.62); // 전체를 천천히 (약 4.5초 → 7초)
 				// 0) 레터박스 + 키네틱 타이포 (검은 배경 위)
-				wordCut(tl, "DETAIL", 0.1, 30);
-				wordCut(tl, "ORIENTED.", 0.45, -30);
+				// 메인 타이틀 자리 그대로 두 줄 (DETAIL / ORIENTED.)
+				wordCut(tl, w1, "DETAIL", 0.1, 12);
+				wordCut(tl, w2, "ORIENTED.", 0.4, -12);
 
 				// 1) 유리 초근접 컷 3개 (검은 막을 걷어 장면을 보여 줌)
-				tl.to(word, { autoAlpha: 0, duration: 0.15, ease: "power1.in" }, 0.72)
+				tl.to([w1, w2], { autoAlpha: 0, duration: 0.15, ease: "power1.in" }, 0.72)
 					.to($(".i3-black"), { autoAlpha: 0, duration: 0.25, ease: "power1.out" }, 0.8);
 				tl.set(intro, { s: 3.4, px: 1.6, py: 0.4, rx: 0.2, ry: -1.1 }, 0.8);
 				camCut(tl, 0.9, { s: 3.4, x: 1.6, y: 0.4, rx: 0.2, ry: -1.1, dx: -0.6 });
@@ -1311,8 +1316,6 @@
 					.to(intro, { s: 1, spin: 0, duration: 1.6, ease: "power3.out" }, 2.88)
 					.to(intro, { face: 0, duration: 2.0, ease: "expo.out" }, 3.0)
 					.to(fluteMat.uniforms.uShift, { value: fluteTarget.s, duration: 0.6, ease: "power2.out" }, 2.86)
-					.to([$(".i3-top")], { yPercent: -100, duration: 0.9, ease: "expo.inOut" }, 3.1)
-					.to([$(".i3-bot")], { yPercent: 100, duration: 0.9, ease: "expo.inOut" }, 3.1)
 					.to(tc, { autoAlpha: 0, duration: 0.3 }, 3.1)
 					// 4) 칸막이 스윕 → 타이틀 → 헤더
 					.set(fluteMat.uniforms.uSweep, { value: 0 }, 2.86)
