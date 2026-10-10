@@ -563,7 +563,7 @@
 	window.addEventListener("touchmove", (e) => drag.on && e.preventDefault(), { passive: false }); // 도형 돌릴 땐 스크롤 막기
 
 	/* ───────── 6. 인트로 ─────────
-	   1) 로딩: 0 → 100% (4·8의 배수, 바뀐 자리만 숫자 띠가 부드럽게 굴러감) + 진행선 — 도형은 작게 돌며 4 → 6 → 8 → 4각으로 변형
+	   1) 로딩: 0 → 100% (4·8의 배수만 표시, 바뀐 자리만 위로 빠지고 새 숫자가 올라옴) + 진행선 — 도형은 작게 돌며 4 → 6 → 8 → 4각으로 변형
 	   2) 공개: 로더가 빠지고 도형이 커지며, 칸막이가 가운데 열부터 한 열씩 끼워짐
 	   3) 타이틀 글자 → 헤더 → 이후 autoMorph초마다 자동 변형 (클릭하면 건너뜀) */
 	let EASE_L = "power4.out"; // 글자 이징 (cubic-bezier(.35, 0, 0, 1))
@@ -596,7 +596,7 @@
 		box.className = "intro2";
 		box.innerHTML = `
 			<div class="i2-meta">
-				<span class="i2-count"><span class="i2-num">${`<span class="i2-d"><span>${[..."01234567890123456789"].map((d) => `<b>${d}</b>`).join("")}</span></span>`.repeat(3)}</span><span class="i2-pct">%</span></span>
+				<span class="i2-count"><span class="i2-num">${'<span class="i2-d"><i>0</i><b>0</b></span>'.repeat(3)}</span><span class="i2-pct">%</span></span>
 				<span class="i2-label">Loading</span>
 			</div>
 			<div class="i2-bar"><i></i></div>`;
@@ -610,9 +610,9 @@
 			.intro2 .i2-num { font-weight: 900; }
 			.intro2 .i2-pct { margin-left: 4px; font-size: 12px; line-height: 16px; letter-spacing: 0.08em; opacity: 0.3; }
 			.intro2 .i2-label { opacity: 0.3; }
-			.intro2 .i2-d { display: inline-block; height: 1em; overflow: hidden; vertical-align: bottom; }
-			.intro2 .i2-d > span { display: block; will-change: transform; }
-			.intro2 .i2-d b { display: block; height: 1em; font-weight: inherit; }
+			.intro2 .i2-d { position: relative; display: inline-block; overflow: hidden; vertical-align: bottom; }
+			.intro2 .i2-d i { display: block; font-style: normal; visibility: hidden; } /* 자리 크기만 잡음 */
+			.intro2 .i2-d b { position: absolute; left: 0; top: 0; font-weight: inherit; will-change: transform; }
 			.intro2 .i2-bar { position: absolute; left: var(--side); right: var(--side); bottom: var(--bot); height: 1px; background: rgba(255,255,255,0.1); overflow: hidden; }
 			.intro2 .i2-bar i { position: absolute; inset: 0; background: #fff; transform-origin: 0 50%; transform: scaleX(0); }`;
 		document.head.appendChild(css);
@@ -635,18 +635,24 @@
 		fitBase();
 		document.fonts.ready.then(fitBase);
 
-		// 숫자 롤링: 자리마다 0~9 띠(두 번 반복)를 바뀐 자리만 앞으로 굴려 새 숫자에 멈춤
-		// 굴러가는 중에 다음 값이 오면 끊지 않고 지금 위치에서 이어서 굴러감
-		const strips = [...box.querySelectorAll(".i2-d > span")].map((el) => ({ el, pos: 0 }));
-		const drawStrip = (s) => (s.el.style.transform = `translateY(${(-s.pos / 20) * 100}%)`);
+		// 숫자 롤링: 바뀐 자리만 기존 숫자는 위로 빠지고 새 숫자가 아래에서 올라옴 (중간 숫자는 안 보임)
+		// 굴러가는 중에 다음 값이 오면 끊지 않고 지금 위치에서 이어서 빠짐
+		const slots = [...box.querySelectorAll(".i2-d")];
+		const roll = { duration: 0.45, ease: "power3.out", overwrite: true };
 		let numStr = "000";
 		const setNum = (str) => {
 			if (str === numStr) return;
-			strips.forEach((s, i) => {
+			slots.forEach((slot, i) => {
 				if (str[i] === numStr[i]) return;
-				if (s.pos >= 10) (s.pos -= 10), drawStrip(s); // 두 번째 띠 → 같은 숫자의 첫 번째 띠로
-				const d = +str[i];
-				gsap.to(s, { pos: d < s.pos - 0.5 ? d + 10 : d, duration: 0.6, ease: "power2.out", delay: i * 0.04, overwrite: true, onUpdate: () => drawStrip(s) });
+				const delay = i * 0.04;
+				slot.querySelectorAll("b:not(.out)").forEach((old) => {
+					old.classList.add("out"); // 이미 빠지는 숫자는 그대로 두고, 지금 보이는(올라오는) 숫자만 빼냄
+					gsap.to(old, { yPercent: -100, ...roll, delay, onComplete: () => old.remove() });
+				});
+				const nu = document.createElement("b");
+				nu.textContent = str[i];
+				slot.appendChild(nu);
+				gsap.fromTo(nu, { yPercent: 100 }, { yPercent: 0, ...roll, delay });
 			});
 			numStr = str;
 		};
