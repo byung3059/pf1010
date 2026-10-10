@@ -17,8 +17,48 @@
 			/* [TEST] 도형 캔버스는 화면에 고정, 프로젝트 섹션이 그 위로 올라옴 */
 			#project_visual { height: 200svh; } /* 1화면은 타이틀 → PROJECT 전환 구간 */
 			#project_visual .canvas_wrap { position: fixed; top: 0; left: 0; width: 100%; height: 100svh; z-index: 0; }
-			#project_site { position: relative; z-index: 1; }
-			.has-proj-fx #project_site > h2 { opacity: 0; } /* PROJECT는 캔버스가 그림 (자리·SEO는 유지) */
+			#project_site { position: relative; } /* z-index를 주면 카드 WebGL 캔버스(z-index 1)가 카드 글자를 덮으므로 주지 않음 */
+			.has-proj-fx #project_site > h2 { opacity: 0; }
+			/* [TEST] 프로젝트 카드 — 8px 배수 가이드 (간격·크기·여백 모두 8의 배수) */
+			#project_site .pro_list { gap: 80px 24px; }
+			#project_site .pro_site a { border-radius: 8px; }
+			#project_site .pro_card { font-family: "Pretendard", sans-serif; color: #fff; }
+			/* 호버 시: 어두운 막 + 소개 */
+			#project_site .pro_info { z-index: 2; position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; padding: 24px 24px 96px; background: rgba(0, 0, 0, 0.56); opacity: 0; transition: opacity 0.4s; }
+			#project_site .pro_info > * { transform: translateY(16px); opacity: 0; transition: transform 0.6s cubic-bezier(0.35, 0, 0, 1), opacity 0.6s; }
+			#project_site .pro_tit { display: block; font-size: 24px; line-height: 32px; font-weight: 700; letter-spacing: -0.02em; }
+			#project_site .pro_line { display: block; width: 296px; max-width: 100%; height: 1px; margin: 24px 0; background: rgba(255, 255, 255, 0.4); transition-delay: 0.04s; }
+			#project_site .pro_desc { transition-delay: 0.08s; }
+			#project_site .pro_desc li { position: relative; padding-left: 8px; font-size: 14px; line-height: 24px; color: rgba(255, 255, 255, 0.88); }
+			#project_site .pro_desc li::before { content: ""; position: absolute; left: 0; top: 11px; width: 2px; height: 2px; border-radius: 50%; background: currentColor; }
+			/* 바로가기 아이콘 (오른쪽 위) */
+			#project_site .pro_go { z-index: 3; position: absolute; top: 24px; right: 24px; width: 56px; height: 56px; color: #fff; opacity: 0; transform: translate(-8px, 8px); transition: opacity 0.4s, transform 0.6s cubic-bezier(0.35, 0, 0, 1); }
+			#project_site .pro_go svg { display: block; width: 100%; height: 100%; }
+			/* 태그 칩 (왼쪽 아래) — 평소 흰색, 호버 시 반투명 */
+			#project_site .pro_tag { z-index: 3; position: absolute; left: 24px; bottom: 24px; display: flex; flex-wrap: wrap; gap: 8px; }
+			#project_site .pro_tag li { display: flex; align-items: center; height: 32px; padding: 0 24px; border-radius: 4px; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08); color: #111; font-size: 12px; font-weight: 700; letter-spacing: 0.02em; transition: background-color 0.4s, color 0.4s; }
+			@media (hover: hover) {
+				#project_site .pro_card:hover .pro_info,
+				#project_site .pro_card:focus-visible .pro_info { opacity: 1; }
+				#project_site .pro_card:hover .pro_info > *,
+				#project_site .pro_card:focus-visible .pro_info > * { transform: none; opacity: 1; }
+				#project_site .pro_card:hover .pro_go,
+				#project_site .pro_card:focus-visible .pro_go { opacity: 1; transform: none; }
+				#project_site .pro_card:hover .pro_tag li,
+				#project_site .pro_card:focus-visible .pro_tag li { background: rgba(255, 255, 255, 0.16); color: #fff; }
+			}
+			/* 프로젝트명: 카드 아래 오른쪽 */
+			#project_site .pro_name { z-index: 2; position: relative; margin-top: 16px; font-family: "Pretendard", sans-serif; font-size: 24px; line-height: 32px; font-weight: 700; color: #fff; text-align: right; }
+			#project_site .pro_name.fx-slot { display: flex; justify-content: flex-end; height: 32px; line-height: 32px; white-space: nowrap; overflow: hidden; }
+			@media (max-width: 768px) {
+				#project_site .pro_list { gap: 48px; }
+				#project_site .pro_name { margin-top: 8px; font-size: 16px; line-height: 24px; }
+				#project_site .pro_name.fx-slot { height: 24px; line-height: 24px; }
+				#project_site .pro_tag { left: 16px; bottom: 16px; }
+				#project_site .pro_tag li { height: 24px; padding: 0 16px; font-size: 10px; }
+				#project_site .pro_go { top: 16px; right: 16px; width: 32px; height: 32px; }
+			}
+ /* PROJECT는 캔버스가 그림 (자리·SEO는 유지) */
 			/* [TEST] 기본 스크롤바 숨김 → js/scrollbar_test.js의 커스텀 스크롤바 사용 */
 			html { scrollbar-width: none; }
 			html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; width: 0; height: 0; }
@@ -130,7 +170,8 @@
 		<script src="./js/cursor.js" defer></script>
 		<script src="./js/smooth_scroll.js" defer></script>
 		<script src="./js/scrollbar_test.js" defer></script>
-		<script src="./js/project_featured.js" defer></script>
+		<script>window.PROJECT_FEATURED_CONFIG = { radius: 8 }; // [TEST] 카드 모서리 8px (CSS와 동일)</script>
+		<script src="./js/project_featured_test.js" defer></script>
 		<script src="./js/custom.js" defer></script>
 	</head>
 
@@ -168,54 +209,134 @@
 
 				<div class="pro_list">
 					<div class="pro_site --01">
-						<a href="">
-							<p>리에의원</p>
+						<a href="" class="pro_card">
+							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
+							<div class="pro_info">
+								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
+								<strong class="pro_tit">병원 브랜드에 맞춘 반응형 웹사이트<br />기획부터 퍼블리싱까지 구축</strong>
+								<i class="pro_line"></i>
+								<ul class="pro_desc"><li>반응형 웹 퍼블리싱</li><li>메인 비주얼 인터랙션 (GSAP)</li><li>그누보드 게시판·예약 커스터마이징</li></ul>
+							</div>
+							<ul class="pro_tag"><li>WEB PUBLISHING</li><li>RESPONSIVE</li></ul>
 						</a>
+						<p class="pro_name">리에의원</p>
 					</div>
 					<div class="pro_site --02">
-						<a href="">
-							<p class="--c-b">연세탑내과의원</p>
+						<a href="" class="pro_card">
+							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
+							<div class="pro_info">
+								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
+								<strong class="pro_tit">병원 브랜드에 맞춘 반응형 웹사이트<br />기획부터 퍼블리싱까지 구축</strong>
+								<i class="pro_line"></i>
+								<ul class="pro_desc"><li>반응형 웹 퍼블리싱</li><li>메인 비주얼 인터랙션 (GSAP)</li><li>그누보드 게시판·예약 커스터마이징</li></ul>
+							</div>
+							<ul class="pro_tag"><li>WEB PUBLISHING</li><li>RESPONSIVE</li></ul>
 						</a>
+						<p class="pro_name">연세탑내과의원</p>
 					</div>
 					<div class="pro_site --03">
-						<a href="">
-							<p>프로미스비뇨의학과의원</p>
+						<a href="" class="pro_card">
+							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
+							<div class="pro_info">
+								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
+								<strong class="pro_tit">병원 브랜드에 맞춘 반응형 웹사이트<br />기획부터 퍼블리싱까지 구축</strong>
+								<i class="pro_line"></i>
+								<ul class="pro_desc"><li>반응형 웹 퍼블리싱</li><li>메인 비주얼 인터랙션 (GSAP)</li><li>그누보드 게시판·예약 커스터마이징</li></ul>
+							</div>
+							<ul class="pro_tag"><li>WEB PUBLISHING</li><li>RESPONSIVE</li></ul>
 						</a>
+						<p class="pro_name">프로미스비뇨의학과의원</p>
 					</div>
 					<div class="pro_site --04">
-						<a href="">
-							<p>연세포레온안과</p>
+						<a href="" class="pro_card">
+							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
+							<div class="pro_info">
+								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
+								<strong class="pro_tit">병원 브랜드에 맞춘 반응형 웹사이트<br />기획부터 퍼블리싱까지 구축</strong>
+								<i class="pro_line"></i>
+								<ul class="pro_desc"><li>반응형 웹 퍼블리싱</li><li>메인 비주얼 인터랙션 (GSAP)</li><li>그누보드 게시판·예약 커스터마이징</li></ul>
+							</div>
+							<ul class="pro_tag"><li>WEB PUBLISHING</li><li>RESPONSIVE</li></ul>
 						</a>
+						<p class="pro_name">연세포레온안과</p>
 					</div>
 					<div class="pro_site --05">
-						<a href="">
-							<p class="--c-b">드림권내과</p>
+						<a href="" class="pro_card">
+							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
+							<div class="pro_info">
+								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
+								<strong class="pro_tit">병원 브랜드에 맞춘 반응형 웹사이트<br />기획부터 퍼블리싱까지 구축</strong>
+								<i class="pro_line"></i>
+								<ul class="pro_desc"><li>반응형 웹 퍼블리싱</li><li>메인 비주얼 인터랙션 (GSAP)</li><li>그누보드 게시판·예약 커스터마이징</li></ul>
+							</div>
+							<ul class="pro_tag"><li>WEB PUBLISHING</li><li>RESPONSIVE</li></ul>
 						</a>
+						<p class="pro_name">드림권내과</p>
 					</div>
 					<div class="pro_site --06">
-						<a href="">
-							<p>동탄시티병원-건강검진센터</p>
+						<a href="" class="pro_card">
+							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
+							<div class="pro_info">
+								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
+								<strong class="pro_tit">병원 브랜드에 맞춘 반응형 웹사이트<br />기획부터 퍼블리싱까지 구축</strong>
+								<i class="pro_line"></i>
+								<ul class="pro_desc"><li>반응형 웹 퍼블리싱</li><li>메인 비주얼 인터랙션 (GSAP)</li><li>그누보드 게시판·예약 커스터마이징</li></ul>
+							</div>
+							<ul class="pro_tag"><li>WEB PUBLISHING</li><li>RESPONSIVE</li></ul>
 						</a>
+						<p class="pro_name">동탄시티병원-건강검진센터</p>
 					</div>
 					<div class="pro_site --07">
-						<a href="">
-							<p>완성형외과의원</p>
+						<a href="" class="pro_card">
+							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
+							<div class="pro_info">
+								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
+								<strong class="pro_tit">병원 브랜드에 맞춘 반응형 웹사이트<br />기획부터 퍼블리싱까지 구축</strong>
+								<i class="pro_line"></i>
+								<ul class="pro_desc"><li>반응형 웹 퍼블리싱</li><li>메인 비주얼 인터랙션 (GSAP)</li><li>그누보드 게시판·예약 커스터마이징</li></ul>
+							</div>
+							<ul class="pro_tag"><li>WEB PUBLISHING</li><li>RESPONSIVE</li></ul>
 						</a>
+						<p class="pro_name">완성형외과의원</p>
 					</div>
 					<div class="pro_site --08">
-						<a href="">
-							<p>KITC 투데이투자방송</p>
+						<a href="" class="pro_card">
+							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
+							<div class="pro_info">
+								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
+								<strong class="pro_tit">병원 브랜드에 맞춘 반응형 웹사이트<br />기획부터 퍼블리싱까지 구축</strong>
+								<i class="pro_line"></i>
+								<ul class="pro_desc"><li>반응형 웹 퍼블리싱</li><li>메인 비주얼 인터랙션 (GSAP)</li><li>그누보드 게시판·예약 커스터마이징</li></ul>
+							</div>
+							<ul class="pro_tag"><li>WEB PUBLISHING</li><li>RESPONSIVE</li></ul>
 						</a>
+						<p class="pro_name">KITC 투데이투자방송</p>
 					</div>
 					<div class="pro_site --09">
-						<a href="">
-							<p>낭만치유농업</p>
+						<a href="" class="pro_card">
+							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
+							<div class="pro_info">
+								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
+								<strong class="pro_tit">병원 브랜드에 맞춘 반응형 웹사이트<br />기획부터 퍼블리싱까지 구축</strong>
+								<i class="pro_line"></i>
+								<ul class="pro_desc"><li>반응형 웹 퍼블리싱</li><li>메인 비주얼 인터랙션 (GSAP)</li><li>그누보드 게시판·예약 커스터마이징</li></ul>
+							</div>
+							<ul class="pro_tag"><li>WEB PUBLISHING</li><li>RESPONSIVE</li></ul>
 						</a>
+						<p class="pro_name">낭만치유농업</p>
 					</div>
 					<div class="pro_site --10">
-						<a href="">
-							<p>코닥미니샷</p>
+						<a href="" class="pro_card">
+							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
+							<div class="pro_info">
+								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
+								<strong class="pro_tit">병원 브랜드에 맞춘 반응형 웹사이트<br />기획부터 퍼블리싱까지 구축</strong>
+								<i class="pro_line"></i>
+								<ul class="pro_desc"><li>반응형 웹 퍼블리싱</li><li>메인 비주얼 인터랙션 (GSAP)</li><li>그누보드 게시판·예약 커스터마이징</li></ul>
+							</div>
+							<ul class="pro_tag"><li>WEB PUBLISHING</li><li>RESPONSIVE</li></ul>
 						</a>
+						<p class="pro_name">코닥미니샷</p>
 					</div>
 				</div>
 			</section>
