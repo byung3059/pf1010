@@ -67,21 +67,20 @@
 				// 뒤 타이틀 글자
 				fontFamily: "Paperlogy", // 폰트 (페이지에 로드된 폰트)
 				textWeight: 900, // 굵기
-				textSize: 140, // 크기(px) — 화면 1024px 초과
-				textSizeM: 11.5, // 크기(vw) — 화면 1024px 이하
+				textSize: 80, // 크기(px) — 화면 1024px 초과
+				textSizeM: 7.8, // 크기(vw) — 화면 1024px 이하
 				lineHeight: 1, // 줄 간격 (글자 크기 배수, 1.2 = 120%)
-				textAlign: "left", // 가로 정렬: "left" | "center" | "right"
-				textVAlign: "bottom", // 세로 정렬: "top" | "center" | "bottom"
-				textX: 80, // 가로 여백(px): left면 왼쪽에서, right면 오른쪽에서, center면 가운데에서 이동(+오른쪽)
-				textY: 80, // 세로 여백(px): top이면 위에서, bottom이면 아래에서, center면 가운데에서 이동(+아래)
+				textAlign: "center", // 가로 정렬: "left" | "center" | "right"
+				textVAlign: "center", // 세로 정렬: "top" | "center" | "bottom"
+				textX: 0, // 가로 여백(px): left면 왼쪽에서, right면 오른쪽에서, center면 가운데에서 이동(+오른쪽)
+				textY: 0, // 세로 여백(px): top이면 위에서, bottom이면 아래에서, center면 가운데에서 이동(+아래)
 
 				// 타이틀 반응형 — CSS의 @media (max-width: 숫자)처럼 화면 너비가 그 값 이하일 때 덮어씀 (작은 값이 우선)
 				// 바꿀 수 있는 값: fontFamily, textWeight, textSize, textSizeM, lineHeight, textAlign, textVAlign, textX, textY, textColor, pointColor
 				// textSize(px)를 적은 구간은 1024px 이하여도 textSizeM(vw) 대신 textSize(px) 사용
 				responsive: {
-					1660: { textX: 40, textY: 40 },
-					768: { textX: 20, textY: 40 },
-					480: { textY: 24 },
+					// [TEST] 가운데 정렬이라 여백 덮어쓰기 없음
+					480: { textSizeM: 10 }, // 아주 작은 화면은 조금 키움
 				},
 
 				fx: { scrollChroma: 0, backBright: 0.65, autoMorph: 3, ripple: 0 }, // autoMorph 3 = 3초마다 다음 도형 (사각→육각→팔각→십각, 클릭해도 넘어감) / ripple 0 = 클릭 물결 끔
