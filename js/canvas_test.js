@@ -1237,9 +1237,13 @@
 			// ── 모션 그래픽 HUD: 초점 프레임(모서리 괄호) · 동심원 펄스 · 눈금자 · 실시간 수치 라벨 ──
 			const hud = $(".i3-hud"),
 				hc = hud.getContext("2d");
-			const H = { a: 0, frame: 0, rings: 0, ruler: 0, labels: 0, collapse: 0 }; // 각 요소 투명도/진행
+			const H = { a: 0, frame: 0, rings: 0, ruler: 0, labels: 0, dots: 0, planes: 0, collapse: 0 }; // 각 요소 투명도/진행
 			const pulses = []; // 동심원 시작 시각
 			let lastPulse = 0;
+			// 점 · 선 · 면 — 선은 1px · rgba(255,255,255,0.1)로만, 점과 면으로 강조
+			const LINE = (a) => `rgba(255,255,255,${0.1 * a})`;
+			const G = CFG.fx.fluteWidth || 40;
+			const cellSeed = (x, y) => (Math.sin(x * 127.1 + y * 311.7) * 43758.5453) % 1; // 칸마다 고정 난수
 			const drawHud = (ms) => {
 				const w = window.innerWidth,
 					h = window.innerHeight,
@@ -1253,50 +1257,58 @@
 				const k = 1 - H.collapse; // 마지막에 가운데로 접힘
 				const cx = w / 2 + (intro.px || 0) * ppw,
 					cy = h / 2 - (intro.py || 0) * ppw;
+				const half = Math.min(Math.max(w, h) / 2 - 40, 2.4 * (intro.s || 1) * ppw) * (0.6 + 0.4 * H.frame) * k;
+				// 칸 좌표 (칸막이 골과 같은 40px 격자: 왼쪽·아래 기준)
+				const gx0 = Math.floor((cx - half) / G),
+					gx1 = Math.ceil((cx + half) / G);
+				const gy0 = Math.floor((h - (cy + half)) / G),
+					gy1 = Math.ceil((h - (cy - half)) / G);
+				// ── 면: 프레임 안 40px 칸이 하나씩 켜졌다 꺼짐 (반투명 면)
+				if (H.planes > 0) {
+					for (let gx = gx0; gx < gx1; gx++)
+						for (let gy = gy0; gy < gy1; gy++) {
+							const r = Math.abs(cellSeed(gx, gy));
+							const on = Math.max(0, Math.sin(ms * 0.004 + r * 40) - 0.6) / 0.4; // 칸마다 다른 박자로 깜빡
+							if (on <= 0) continue;
+							hc.fillStyle = `rgba(255,255,255,${0.07 * on * H.planes * H.a})`;
+							hc.fillRect(gx * G, h - (gy + 1) * G, G, G);
+						}
+					// 프레임 전체 면 (아주 옅게)
+					hc.fillStyle = `rgba(255,255,255,${0.025 * H.planes * H.a})`;
+					hc.fillRect(cx - half, cy - half, half * 2, half * 2);
+				}
 				hc.lineWidth = 1;
-				hc.font = '500 10px "Pretendard", monospace';
-				// 동심원 펄스 (0.45초마다 하나씩, 바깥으로 퍼지며 사라짐)
+				// ── 선 (모두 1px · 0.1): 가운데 십자 (화면 끝까지), 프레임 테두리, 동심원, 눈금
+				if (H.frame > 0) {
+					hc.strokeStyle = LINE(H.frame * H.a);
+					hc.beginPath();
+					hc.moveTo(0, Math.round(cy) + 0.5);
+					hc.lineTo(w, Math.round(cy) + 0.5);
+					hc.moveTo(Math.round(cx) + 0.5, 0);
+					hc.lineTo(Math.round(cx) + 0.5, h);
+					hc.rect(Math.round(cx - half) + 0.5, Math.round(cy - half) + 0.5, Math.round(half * 2), Math.round(half * 2));
+					hc.stroke();
+				}
 				if (H.rings > 0) {
-					if (ms - lastPulse > 450) {
+					if (ms - lastPulse > 600) {
 						pulses.push(ms);
 						lastPulse = ms;
 					}
 					for (let n = pulses.length - 1; n >= 0; n--) {
-						const age = (ms - pulses[n]) / 1600;
+						const age = (ms - pulses[n]) / 2000;
 						if (age > 1) {
 							pulses.splice(n, 1);
 							continue;
 						}
-						const r = (40 + age * Math.max(w, h) * 0.6) * k;
-						hc.strokeStyle = `rgba(255,255,255,${0.22 * (1 - age) * H.rings * H.a})`;
+						hc.strokeStyle = LINE((1 - age) * H.rings * H.a);
 						hc.beginPath();
-						hc.arc(cx, cy, r, 0, Math.PI * 2);
+						hc.arc(cx, cy, (40 + age * Math.max(w, h) * 0.6) * k, 0, Math.PI * 2);
 						hc.stroke();
 					}
 				}
-				// 초점 프레임: 도형 크기를 따라 줄어드는 네 모서리 괄호 + 가운데 십자
-				if (H.frame > 0) {
-					const half = Math.min(Math.max(w, h), 2.4 * (intro.s || 1) * ppw) * (0.6 + 0.4 * H.frame) * k;
-					const L = 24 * H.frame;
-					hc.strokeStyle = `rgba(255,255,255,${0.9 * H.frame * H.a})`;
-					hc.beginPath();
-					for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
-						const x = cx + sx * half,
-							y = cy + sy * half;
-						hc.moveTo(x, y - sy * -L);
-						hc.lineTo(x, y);
-						hc.lineTo(x - sx * L, y);
-					}
-					hc.moveTo(cx - 8, cy);
-					hc.lineTo(cx + 8, cy);
-					hc.moveTo(cx, cy - 8);
-					hc.lineTo(cx, cy + 8);
-					hc.stroke();
-				}
-				// 눈금자 (위·아래, 도형 회전에 맞춰 흘러감)
 				if (H.ruler > 0) {
 					const off = ((intro.spinAcc || 0) * 240 + ms * 0.04) % 40;
-					hc.strokeStyle = `rgba(255,255,255,${0.32 * H.ruler * H.a})`;
+					hc.strokeStyle = LINE(H.ruler * H.a);
 					hc.beginPath();
 					for (let x = -off; x < w; x += 8) {
 						const big = Math.round((x + off) / 8) % 5 === 0;
@@ -1308,14 +1320,32 @@
 					}
 					hc.stroke();
 				}
-				// 실시간 수치 라벨 (프레임 모서리 옆)
+				// ── 점: 프레임 안 격자 교차점(작은 점) · 프레임 네 모서리 · 가운데 (큰 점)
+				const dot = (x, y, sz, a) => {
+					hc.fillStyle = `rgba(255,255,255,${a})`;
+					hc.fillRect(Math.round(x - sz / 2), Math.round(y - sz / 2), sz, sz);
+				};
+				if (H.dots > 0) {
+					for (let gx = gx0; gx <= gx1; gx++)
+						for (let gy = gy0; gy <= gy1; gy++) {
+							const x = gx * G,
+								y = h - gy * G;
+							if (Math.abs(x - cx) > half || Math.abs(y - cy) > half) continue;
+							dot(x, y, 2, 0.45 * H.dots * H.a);
+						}
+				}
+				if (H.frame > 0) {
+					for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) dot(cx + sx * half, cy + sy * half, 6 * H.frame, H.frame * H.a);
+					dot(cx, cy, 8 * H.frame, H.frame * H.a);
+				}
+				// 실시간 수치 (작은 글씨)
 				if (H.labels > 0) {
 					const deg = Math.round(((((intro.spinAcc || 0) * (CFG.fx.spin || 0.6) + intro.ry) * 180) / Math.PI) % 360 + 360) % 360;
-					const half = Math.min(Math.max(w, h), 2.4 * (intro.s || 1) * ppw) * k;
-					hc.fillStyle = `rgba(255,255,255,${0.7 * H.labels * H.a})`;
-					hc.fillText(`ROT ${String(deg).padStart(3, "0")}°`, cx + half + 8, cy - half + 8);
-					hc.fillText(`SCALE ${(intro.s || 1).toFixed(2)}×`, cx + half + 8, cy - half + 24);
-					hc.fillText(`REFR ${(fluteMat.uniforms.uShift.value / DPR).toFixed(1)}PX`, cx - half - 88, cy + half - 8);
+					hc.font = '500 10px "Pretendard", monospace';
+					hc.fillStyle = `rgba(255,255,255,${0.6 * H.labels * H.a})`;
+					hc.fillText(`ROT ${String(deg).padStart(3, "0")}°`, cx + half + 12, cy - half + 8);
+					hc.fillText(`SCALE ${(intro.s || 1).toFixed(2)}×`, cx + half + 12, cy - half + 24);
+					hc.fillText(`REFR ${(fluteMat.uniforms.uShift.value / DPR).toFixed(1)}PX`, cx - half - 92, cy + half - 8);
 				}
 			};
 			const tick3 = () => {
@@ -1348,6 +1378,8 @@
 					.to(H, { ruler: 1, duration: 0.6, ease: "power2.out" }, 0.8)
 					.to(H, { rings: 1, duration: 0.4, ease: "none" }, 1.0)
 					.to(H, { labels: 1, duration: 0.4, ease: "none" }, 1.2)
+					.to(H, { dots: 1, duration: 0.5, ease: "none" }, 0.65) // 점
+					.to(H, { planes: 1, duration: 0.6, ease: "none" }, 1.0) // 면
 					// 롱테이크: 천천히 돌며 뒤로 빠져나옴 (구도·크기·각도가 한 곡선으로 함께)
 					.to(intro, { s: 1, px: 0, py: 0, rx: 0.4, ry: -0.55, duration: 3.6, ease: "power2.inOut" }, 0.3)
 					// 빠져나올수록 굴절이 평소 세기로 가라앉음
@@ -1360,7 +1392,7 @@
 					.to(intro, { face: 0, duration: 2.2, ease: "power2.inOut" }, 3.9)
 					.to($(".i3-cap"), { autoAlpha: 0, duration: 0.6, ease: "power2.in" }, 4.0)
 					// HUD는 도형 쪽으로 접히며 사라짐
-					.to(H, { rings: 0, labels: 0, ruler: 0, duration: 0.4, ease: "power2.in" }, 3.5)
+					.to(H, { rings: 0, labels: 0, ruler: 0, dots: 0, planes: 0, duration: 0.4, ease: "power2.in" }, 3.5)
 					.to(H, { collapse: 1, duration: 0.5, ease: "power3.in" }, 3.6)
 					.to(H, { a: 0, duration: 0.2, ease: "none" }, 4.0)
 					// 진짜 타이틀(캔버스) → 헤더
