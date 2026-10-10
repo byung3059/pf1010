@@ -1067,9 +1067,9 @@
 		frame = 0;
 	if (FX.intro && FXON && window.gsap) {
 		// [TEST] 인트로
-		//   1) 점선 : 칸막이 골 경계와 같은 자리에 아주 옅은 점선(rgba 255,255,255,0.1)이 가운데에서 양쪽으로 쫘악 그어짐
-		//   2) 입체 : 도형이 천천히 3D로 튀어나옴 (커지며 두께가 솟고 살짝 기울어 옆면)
-		//   3) 효과 : 그 순간 점선이 실선으로 이어지며 유리 칸막이 굴절이 걸림 → 선이 계단처럼 어긋나다 사라짐 → 평소 자세 → 타이틀 → 헤더
+		//   1) 점선 : 칸막이 골 경계와 같은 자리에 아주 옅은 점선(rgba 255,255,255,0.1)이 가운데 쌍부터 양쪽 두 줄씩 40px 간격으로 생김
+		//   2) 입체 : 도형이 천천히 3D로 튀어나옴 (커지며 두께가 솟고 살짝 기울어 옆면) → 점선 위에서 잠깐 그대로 보여 줌
+		//   3) 효과 : 점선이 실선으로 이어지며 유리 칸막이 굴절이 걸림 → 선이 계단처럼 어긋나다 사라짐 → 평소 자세 → 타이틀 → 헤더
 		intro.s = 1;
 		intro.spin = 0;
 		intro.depth = 0.02;
@@ -1114,11 +1114,11 @@
 				oc.lineWidth = 1;
 				oc.setLineDash([4 + 4 * S.solid, 4 - 4 * S.solid + 0.001]); // 점선(4/4) → 실선으로 이어짐
 				oc.beginPath();
-				const far = Math.hypot(w, h) / 2;
-				const reach = S.lines * far * 1.25; // 가운데에서 이 거리까지 선이 생김
+				const nMax = Math.ceil(Math.max(w, h) / 2 / G) + 1; // 가운데에서 바깥까지 쌍 개수
+				const step = S.lines * nMax; // 지금까지 생긴 쌍 수 (가운데 쌍부터 한 쌍씩)
+				const lineQ = (dist) => Math.min(1, Math.max(0, (step - Math.floor(dist / G)) * 2.5)); // 각 쌍은 빠르게 뻗음
 				for (let x = G; x < w; x += G) {
-					const dx = Math.abs(x - cx);
-					const q = Math.min(1, Math.max(0, (reach - dx) / (far * 0.35)));
+					const q = lineQ(Math.abs(x - cx));
 					if (q <= 0) continue;
 					const e = 1 - Math.pow(1 - q, 3);
 					const vx = Math.round(x) + 0.5;
@@ -1129,8 +1129,7 @@
 				}
 				for (let yb = G; yb < h; yb += G) {
 					const y = h - yb;
-					const dy = Math.abs(y - cy);
-					const q = Math.min(1, Math.max(0, (reach - dy) / (far * 0.35)));
+					const q = lineQ(Math.abs(y - cy));
 					if (q <= 0) continue;
 					const e = 1 - Math.pow(1 - q, 3);
 					const hy = Math.round(y) + 0.5;
@@ -1191,27 +1190,28 @@
 				},
 			});
 			introTl
-				// 1) 점선: 가운데에서 양쪽으로 쫘악 (rgba 255,255,255,0.1)
-				.to(S, { lines: 1, duration: 1.1, ease: "power2.inOut" }, 0.15)
+				// 1) 점선: 가운데 쌍부터 양쪽 두 줄씩 40px 간격으로 차례로 생김 (rgba 255,255,255,0.1)
+				.to(S, { lines: 1, duration: 1.1, ease: "none" }, 0.15)
 				// 2) 도형이 천천히 3D로 튀어나옴: 작고 납작한 상태 → 커지며 두께가 앞으로 솟고 살짝 기울어 옆면이 보임
 				.add(() => {
 					build.value = 1;
 					gsap.fromTo(flash, { value: 0.6 }, { value: 0, duration: 1.6, ease: "power2.out" }); // 은은하게 번쩍
-				}, 1.4)
-				.fromTo(intro, { s: 0.55 }, { s: 1, duration: 2.0, ease: "expo.out" }, 1.4)
-				.to(intro, { depth: 1, duration: 2.0, ease: "back.out(1.4)" }, 1.45)
-				.fromTo(intro, { pop: 0 }, { pop: 1, duration: 0.6, ease: "power2.out", yoyo: true, repeat: 1 }, 1.5)
-				.to(intro, { rx: 0.45, ry: -0.6, duration: 1.8, ease: "power3.out" }, 1.5)
-				// 3) 같은 순간 점선이 실선으로 이어지며 유리 칸막이 효과가 걸림 → 선이 계단처럼 어긋나다 유리 속으로 사라짐
-				.to(S, { solid: 1, duration: 0.5, ease: "power2.inOut" }, 1.45)
-				.to(fluteMat.uniforms.uShift, { value: fluteTarget.s, duration: 1.0, ease: "power2.inOut" }, 1.6)
-				.to(fluteMat.uniforms.uShiftT, { value: fluteTarget.t, duration: 1.0, ease: "power2.inOut" }, 1.6)
-				.to(S, { linesA: 0, duration: 0.9, ease: "power2.in" }, 2.1)
-				.to(intro, { face: 0, duration: 2.2, ease: "expo.out" }, 3.4) // 평소 자세로
+				}, 1.35)
+				.fromTo(intro, { s: 0.55 }, { s: 1, duration: 2.0, ease: "expo.out" }, 1.35)
+				.to(intro, { depth: 1, duration: 2.0, ease: "back.out(1.4)" }, 1.4)
+				.fromTo(intro, { pop: 0 }, { pop: 1, duration: 0.6, ease: "power2.out", yoyo: true, repeat: 1 }, 1.45)
+				.to(intro, { rx: 0.45, ry: -0.6, duration: 1.8, ease: "power3.out" }, 1.45)
+				// (도형을 점선 위에 그대로 잠깐 보여 줌 — 효과 없음)
+				// 3) 효과: 점선이 실선으로 이어지며 유리 칸막이 굴절이 걸림 → 선이 계단처럼 어긋나다 유리 속으로 사라짐
+				.to(S, { solid: 1, duration: 0.5, ease: "power2.inOut" }, 3.1)
+				.to(fluteMat.uniforms.uShift, { value: fluteTarget.s, duration: 1.0, ease: "power2.inOut" }, 3.25)
+				.to(fluteMat.uniforms.uShiftT, { value: fluteTarget.t, duration: 1.0, ease: "power2.inOut" }, 3.25)
+				.to(S, { linesA: 0, duration: 0.9, ease: "power2.in" }, 3.75)
+				.to(intro, { face: 0, duration: 2.2, ease: "expo.out" }, 3.6) // 평소 자세로
 				.add(() => {
 					if (!titleOut) gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
-				}, 3.5) // 타이틀
-				.to(hdr, { autoAlpha: 1, y: 0, duration: 0.6, ease: "power4.out", stagger: 0.05 }, 3.9); // 헤더
+				}, 4.2) // 타이틀
+				.to(hdr, { autoAlpha: 1, y: 0, duration: 0.6, ease: "power4.out", stagger: 0.05 }, 4.6); // 헤더
 		};
 		// 인트로 중 클릭하면 바로 완성
 		window.addEventListener("click", () => {
