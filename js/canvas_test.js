@@ -528,8 +528,8 @@
 	// [TEST] 사각 → 육각 → 팔각 → 십각 너트 (같은 두께·구멍, 꼭짓점이 3° 샘플 간격에 맞도록 시작 각도 지정)
 	const nut = (n, corner) =>
 		buildShape(lineProf({ outB: polyR(n, 2.1, corner), outT: polyR(n, 2.1, corner), inT: () => 1.18, inB: () => 1.18, y0: -0.45, y1: 0.45 }), new THREE.Matrix4().makeRotationX(Math.PI / 2));
-	// [TEST] 4 → 6 → 8 → 12 → 16 → 24 → 32 → 40각 → 원 → (다시 4각) 순서로 계속 변형
-	const SIDES = [4, 6, 8, 12, 16, 24, 32, 40, 0]; // 0 = 원
+	// [TEST] 4 → 6 → 8각 → (다시 4각) 순서로 계속 변형
+	const SIDES = [4, 6, 8]; // 0을 넣으면 원
 	const CORNER = { 4: SQ, 6: HX, 8: 0, 12: HX, 16: 0, 24: 0, 32: 0, 40: HX };
 	const SHAPES = SIDES.map((n) =>
 		n ? nut(n, CORNER[n]) : buildShape(lineProf({ outB: () => 2.06, outT: () => 2.06, inT: () => 1.18, inB: () => 1.18, y0: -0.45, y1: 0.45 }), new THREE.Matrix4().makeRotationX(Math.PI / 2))
@@ -1430,7 +1430,7 @@
 			intro.ry = -0.55;
 			intro.face = 1;
 			intro.spinOn = true; // 처음부터 천천히 돎
-			intro.lm = 0; // 로딩 중 도형 변형 진행 (0 = 4각, 8 = 원, 9 = 다시 4각)
+			intro.lm = 0; // 로딩 중 도형 변형 진행 (0 = 4각, 1 = 6각, 2 = 8각, 3 = 다시 4각)
 			fluteMat.uniforms.uSweep.value = 0;
 			fluteMat.uniforms.uShift.value = fluteTarget.s; // 칸막이 세기는 미리 두고, 스윕으로 열마다 끼움
 			fluteMat.uniforms.uShiftT.value = fluteTarget.t;
@@ -1524,7 +1524,7 @@
 						duration: 3.2,
 						ease: "power1.inOut",
 						onUpdate() {
-							intro.lm = load.p * 9;
+							intro.lm = load.p * SHAPES.length;
 							setNum(String(PCT[Math.min(PCT.length - 1, Math.floor(load.p * (PCT.length - 1) + 0.0001))]).padStart(3, "0"));
 							bar.style.transform = `scaleX(${load.p})`;
 						},
