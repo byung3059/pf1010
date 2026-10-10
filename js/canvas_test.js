@@ -1451,9 +1451,9 @@
 				.intro2 { --side: 80px; }
 				@media (max-width: 1660px) { .intro2 { --side: 40px; } }
 				@media (max-width: 768px) { .intro2 { --side: 20px; } }
-				.intro2 .i2-meta { position: absolute; left: var(--side); right: var(--side); bottom: calc(var(--side) + 24px); display: flex; justify-content: space-between; font-size: 12px; line-height: 16px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.56; }
-				.intro2 .i2-bar { position: absolute; left: var(--side); right: var(--side); bottom: var(--side); height: 8px; background: repeating-linear-gradient(90deg, rgba(255,255,255,0.24) 0 1px, transparent 1px 40px); }
-				.intro2 .i2-bar i { position: absolute; left: 0; top: 3px; width: 100%; height: 2px; background: #fff; transform-origin: 0 50%; transform: scaleX(0); }
+				.intro2 .i2-meta { position: absolute; left: var(--side); right: var(--side); bottom: calc(var(--side) + 17px); display: flex; justify-content: space-between; font-size: 12px; line-height: 16px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.56; }
+				.intro2 .i2-bar { position: absolute; left: var(--side); right: var(--side); bottom: var(--side); height: 1px; background: rgba(255,255,255,0.1); overflow: hidden; }
+				.intro2 .i2-bar i { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background: #fff; transform-origin: 0 50%; transform: scaleX(0); }
 				.intro2 .i2-meta { align-items: flex-end; opacity: 1; }
 				.intro2 .i2-meta > span:last-child { opacity: 0.56; }
 				/* 퍼센트 숫자: 메인 타이틀(DETAIL ORIENTED.)과 같은 크기·굵기 */
