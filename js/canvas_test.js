@@ -387,6 +387,12 @@
 	});
 	const projScene = new THREE.Scene();
 	projScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), projMat));
+	// [TEST] 타이틀도 도형 앞에: 배경 셰이더에서는 글자를 빼고(textA 0), 같은 오버레이 방식으로 도형 위에 그림
+	const titleMat = projMat.clone();
+	titleMat.uniforms = { tProj: { value: textTex }, uRes: res, uProjA: { value: 1 } };
+	const titleScene = new THREE.Scene();
+	titleScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), titleMat));
+	textA.value = 0;
 
 	/* ---------- 도형: 피라미드(A) ↔ 사각 바(B) 모핑 ---------- */
 	const scene = new THREE.Scene();
@@ -827,9 +833,9 @@
         vec2 p = gl_FragCoord.xy;
         // 세로 골 + 가로 골 (격자 유리): 골 안 위치 0~1 → 가운데 0 · 양끝 ±0.5
         vec2 b = vec2(fract(p.x / uW), fract(p.y / uW)) - 0.5;
-        vec4 base = flute(tBase, p, b, uShiftT); // 배경 + 타이틀
+        vec4 base = flute(tBase, p, b, uShiftT); // 배경
         vec4 sh = flute(tGlow, p, b, uShift);    // 도형 (프리멀티플라이)
-        vec4 pj = flute(tProj, p, b, uShiftT);   // PROJECT (프리멀티플라이)
+        vec4 pj = flute(tProj, p, b, uShiftT);   // 글자: 타이틀 + PROJECT (프리멀티플라이, 도형 앞)
         vec3 c = base.rgb * (1.0 - sh.a) + sh.rgb;
         c = c * (1.0 - pj.a) + pj.rgb;
         // 블룸: 도형의 밝은 부분만 원형으로 모아 은은하게 번지게 (글자는 번지지 않음)
@@ -1228,8 +1234,9 @@
 			renderer.setRenderTarget(rtGlow);
 			renderer.clear();
 			renderer.render(scene, camera);
-			renderer.setRenderTarget(rtProj);
+			renderer.setRenderTarget(rtProj); // 글자 레이어 (타이틀 + PROJECT, 도형 앞)
 			renderer.clear();
+			renderer.render(titleScene, orthoCam);
 			if (projOn) renderer.render(projScene, orthoCam);
 			renderer.setClearAlpha(1);
 			renderer.setRenderTarget(null);
@@ -1240,6 +1247,7 @@
 			renderer.clear();
 			renderer.render(bgScene, orthoCam);
 			renderer.render(scene, camera);
+			renderer.render(titleScene, orthoCam);
 			if (projOn) renderer.render(projScene, orthoCam);
 		}
 	}
