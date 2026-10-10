@@ -1459,7 +1459,7 @@
 				.intro2 .i2-meta { align-items: flex-end; opacity: 1; font-weight: 100; }
 				.intro2 .i2-meta > span:last-child { opacity: 0.3; }
 				/* 퍼센트 숫자: 메인 타이틀(DETAIL ORIENTED.)과 같은 크기·굵기 */
-				.intro2 .i2-count { font-size: ${fsT}px; line-height: 1; font-weight: 100; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
+				.intro2 .i2-count { font-size: ${Math.round(fsT * 2 / 3)}px; line-height: 1; font-weight: 100; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
 				.intro2 .i2-num { opacity: 1; color: #fff; font-weight: 900; }
 				.intro2 .i2-pct { opacity: 0.3; font-size: 12px; line-height: 16px; letter-spacing: 0.08em; margin-left: 4px; }
 				/* 숫자 롤링: 자리마다 바뀔 때 아래에서 위로 올라옴 */
