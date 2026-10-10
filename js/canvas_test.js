@@ -1189,7 +1189,7 @@
 		// 마우스 방향으로 따라 움직임 + 스크롤하면 카메라 쪽으로 다가옴
 		par.x += (mouse.x * FX.parallax * m - par.x) * 0.06;
 		par.y += (-mouse.y * FX.parallax * 0.6 * m - par.y) * 0.06;
-		prism.position.set(par.x, par.y + sp * 0.2, sp * 1.2);
+		prism.position.set(0, 0, sp * 1.2); // [TEST] 화면 정가운데 고정 (마우스 따라 움직이지 않음, 스크롤하면 앞으로만 다가옴)
 		// 글자 애니메이션 중이면 타이틀·PROJECT 다시 그림
 		if (txtDirty) {
 			txtDirty = false;
