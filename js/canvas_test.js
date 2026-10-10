@@ -1225,10 +1225,13 @@
 				.intro3 { position: fixed; inset: 0; z-index: 60; pointer-events: none; color: #fff; font-family: ${font}; }
 				.intro3 .i3-black { position: absolute; inset: 0; background: #000; }
 				.intro3 .i3-hud { position: absolute; inset: 0; width: 100%; height: 100%; }
+				.intro3 { --side: 80px; }
+				@media (max-width: 1660px) { .intro3 { --side: 40px; } }
+				@media (max-width: 768px) { .intro3 { --side: 20px; } }
 				.intro3 .i3-cap { position: absolute; bottom: 40px; font-size: 12px; line-height: 16px; letter-spacing: 0.08em; text-transform: uppercase; font-variant-numeric: tabular-nums; opacity: 0; }
-				.intro3 .i3-l { left: 40px; }
-				.intro3 .i3-r { right: 40px; }
-				@media (max-width: 768px) { .intro3 .i3-cap { bottom: 24px; } .intro3 .i3-l { left: 16px; } .intro3 .i3-r { right: 16px; } }`;
+				.intro3 .i3-l { left: var(--side); }
+				.intro3 .i3-r { right: var(--side); }
+				@media (max-width: 768px) { .intro3 .i3-cap { bottom: 24px; } }`;
 			document.head.appendChild(css);
 			document.body.appendChild(box);
 			const $ = (q) => box.querySelector(q);
@@ -1441,12 +1444,15 @@
 			const css = document.createElement("style");
 			css.textContent = `
 				.intro2 { position: fixed; inset: 0; z-index: 60; pointer-events: none; color: #fff; font-family: ${font}; }
-				.intro2 .i2-meta { position: absolute; left: 40px; right: 40px; bottom: 120px; display: flex; justify-content: space-between; font-size: 12px; line-height: 16px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.56; }
-				.intro2 .i2-bar { position: absolute; left: 40px; right: 40px; bottom: 96px; height: 8px; background: repeating-linear-gradient(90deg, rgba(255,255,255,0.24) 0 1px, transparent 1px 40px); }
+				.intro2 { --side: 80px; }
+				@media (max-width: 1660px) { .intro2 { --side: 40px; } }
+				@media (max-width: 768px) { .intro2 { --side: 20px; } }
+				.intro2 .i2-meta { position: absolute; left: var(--side); right: var(--side); bottom: 120px; display: flex; justify-content: space-between; font-size: 12px; line-height: 16px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.56; }
+				.intro2 .i2-bar { position: absolute; left: var(--side); right: var(--side); bottom: 96px; height: 8px; background: repeating-linear-gradient(90deg, rgba(255,255,255,0.24) 0 1px, transparent 1px 40px); }
 				.intro2 .i2-bar i { position: absolute; left: 0; top: 3px; width: 100%; height: 2px; background: #fff; transform-origin: 0 50%; transform: scaleX(0); }
-				.intro2 .i2-count { position: absolute; right: 40px; top: 40px; display: flex; align-items: flex-start; gap: 8px; font-size: clamp(64px, 10vw, 160px); line-height: 0.8; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -0.04em; }
+				.intro2 .i2-count { position: absolute; right: var(--side); top: 40px; display: flex; align-items: flex-start; gap: 8px; font-size: clamp(64px, 10vw, 160px); line-height: 0.8; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -0.04em; }
 				.intro2 .i2-pct { font-size: 0.24em; line-height: 1; opacity: 0.56; }
-				@media (max-width: 768px) { .intro2 .i2-meta, .intro2 .i2-bar { left: 16px; right: 16px; } .intro2 .i2-count { right: 16px; top: 80px; } }`;
+				@media (max-width: 768px) { .intro2 .i2-count { top: 80px; } }`;
 			document.head.appendChild(css);
 			document.body.appendChild(box);
 			const $ = (q) => box.querySelector(q);
