@@ -1651,24 +1651,40 @@
 	}).observe(wrap);
 
 	// [TEST] 인트로 동안 스크롤 잠금 (test.html의 html.intro-lock) → 인트로 끝나면 해제
+	// 스크롤바는 숨기지 않고, 휠·터치·키 입력만 막음 (스크롤바를 끌어도 맨 위로 되돌림)
 	let scrollLock = document.documentElement.classList.contains("intro-lock"),
-		lenisStopped = false;
-	window.scrollTo(0, 0);
+		lenisReset = false;
+	const SCROLL_KEYS = ["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " ", "Spacebar"];
+	const blockScroll = (e) => {
+		if (!scrollLock) return;
+		if (e.type === "keydown" && !SCROLL_KEYS.includes(e.key)) return;
+		e.preventDefault();
+		e.stopPropagation(); // Lenis까지 안 가게
+	};
+	const keepTop = () => {
+		if (scrollLock && window.scrollY) window.scrollTo(0, 0);
+	};
+	if (scrollLock) {
+		["wheel", "touchmove", "keydown"].forEach((ev) => window.addEventListener(ev, blockScroll, { capture: true, passive: false }));
+		window.addEventListener("scroll", keepTop, { passive: true });
+		window.scrollTo(0, 0);
+	}
 	function lockTick() {
 		if (!scrollLock) return;
 		if (!introStart || intro.done) {
 			scrollLock = false;
 			document.documentElement.classList.remove("intro-lock");
-			if (window.lenis) window.lenis.start();
+			["wheel", "touchmove", "keydown"].forEach((ev) => window.removeEventListener(ev, blockScroll, { capture: true }));
+			window.removeEventListener("scroll", keepTop);
+			if (window.lenis) window.lenis.scrollTo(0, { immediate: true, force: true });
 			if (window.ScrollTrigger) ScrollTrigger.refresh();
 			return;
 		}
-		if (window.lenis && !lenisStopped) {
-			window.lenis.stop();
+		if (window.lenis && !lenisReset) {
 			window.lenis.scrollTo(0, { immediate: true, force: true });
-			lenisStopped = true;
+			lenisReset = true;
 		}
-		if (window.scrollY) window.scrollTo(0, 0);
+		keepTop();
 	}
 
 	function tick() {

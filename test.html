@@ -18,9 +18,7 @@
 		<style>
 			/* [TEST] 인트로 전 헤더 깜빡임 방지 (canvas_test.js가 클래스를 지우고 헤더 등장 애니메이션 시작, 4초 뒤엔 무조건 지움) */
 			html.intro-pending #header { visibility: hidden; }
-			/* [TEST] 인트로 중엔 스크롤 막고 스크롤바 숨김, 아래 포트폴리오도 안 보이게 (canvas_test.js가 인트로 끝나면 intro-lock 제거) */
-			html.intro-lock, html.intro-lock body { overflow: hidden; scrollbar-width: none; }
-			html.intro-lock::-webkit-scrollbar, html.intro-lock body::-webkit-scrollbar { display: none; width: 0; height: 0; }
+			/* [TEST] 인트로 중엔 스크롤만 막음(스크롤바는 그대로, js에서 처리), 아래 포트폴리오도 안 보이게 (canvas_test.js가 인트로 끝나면 intro-lock 제거) */
 			#main > *:not(#project_visual) { transition: opacity 1.2s cubic-bezier(0.22, 1, 0.36, 1), transform 1.2s cubic-bezier(0.22, 1, 0.36, 1); }
 			html.intro-lock #main > *:not(#project_visual) { opacity: 0; transform: translateY(80px); pointer-events: none; }
 			/* [TEST] 헤더: 로고와 메뉴를 한 줄 바에 넣어 양옆 여백을 똑같이(80px / 1660px 이하 40px), 세로 가운데 정렬 */
