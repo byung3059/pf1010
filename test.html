@@ -85,7 +85,7 @@
 			/* [TEST] 기본 스크롤바 숨김 → js/scrollbar_test.js의 커스텀 스크롤바 사용 */
 			html { scrollbar-width: none; }
 			html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; width: 0; height: 0; }
-			.c_scrollbar { z-index: 1000; position: fixed; top: 50%; right: 6px; height: calc(100vh - 24px); max-height: 400px; transform: translateY(-50%); width: 6px; border-radius: 99px; background: #e4e4ec; transition: width 0.2s, opacity 0.3s; }
+			.c_scrollbar { z-index: 1000; position: fixed; top: 50%; right: 6px; height: calc(100vh - 24px); max-height: 160px; transform: translateY(-50%); width: 6px; border-radius: 99px; background: #e4e4ec; transition: width 0.2s, opacity 0.3s; }
 			.c_scrollbar .thumb { position: absolute; top: 0; left: 0; width: 100%; min-height: 40px; border-radius: 99px; background: #3a3a42; cursor: grab; transition: background-color 0.2s; will-change: transform; }
 			.c_scrollbar:hover, .c_scrollbar.is-drag { width: 8px; }
 			.c_scrollbar.is-drag .thumb { background: #222228; cursor: grabbing; }
