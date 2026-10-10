@@ -1176,6 +1176,7 @@
 			introStart = () => {
 				gsap.ticker.add(drawLines);
 				introTl = gsap.timeline({ onComplete: finish });
+				introTl.timeScale(0.7); // 인트로 전체 속도 (1 = 원래, 낮을수록 느림)
 				introTl
 					// 1) 선: 가운데 쌍부터 두 줄씩
 					.to(L, { draw: 1, duration: 1.8, ease: "power1.inOut" }, 0.2)
@@ -1358,6 +1359,7 @@
 			introStart = () => {
 				gsap.ticker.add(tick3);
 				introTl = gsap.timeline({ onComplete: finish });
+				introTl.timeScale(0.7); // 인트로 전체 속도 (1 = 원래, 낮을수록 느림)
 				const blk = $(".i3-black");
 				// 건축 영상처럼: 도형의 한 부분을 아주 크게 잡은 디테일 컷 → 컷 안에서 천천히 흐름 → 검은 화면으로 짧게 끊고 다음 부분
 				// (lx, ly) = 화면 가운데에 올 도형 위 지점(로컬 좌표), s = 확대 배율
@@ -1459,7 +1461,7 @@
 				/* 퍼센트 숫자: 메인 타이틀(DETAIL ORIENTED.)과 같은 크기·굵기 */
 				.intro2 .i2-count { font-size: ${fsT}px; line-height: 1; font-weight: 100; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
 				.intro2 .i2-num { opacity: 1; color: #fff; font-weight: 900; }
-				.intro2 .i2-pct { opacity: 0.3; }
+				.intro2 .i2-pct { opacity: 0.3; font-size: 12px; line-height: 16px; letter-spacing: 0.08em; margin-left: 4px; }
 				/* 숫자 롤링: 자리마다 바뀔 때 아래에서 위로 올라옴 */
 				.intro2 .i2-d { position: relative; display: inline-block; overflow: hidden; vertical-align: bottom; }
 				.intro2 .i2-d b { display: block; font-weight: inherit; }
@@ -1490,8 +1492,8 @@
 								slot._tl = null;
 							},
 						})
-						.to(old, { yPercent: -100, duration: 0.36, ease: "power3.inOut" }, i * 0.03)
-						.fromTo(nu, { yPercent: 100 }, { yPercent: 0, duration: 0.36, ease: "power3.inOut" }, i * 0.03);
+						.to(old, { yPercent: -100, duration: 0.5, ease: "power3.out" }, i * 0.04)
+						.fromTo(nu, { yPercent: 100 }, { yPercent: 0, duration: 0.5, ease: "power3.out" }, i * 0.04);
 				});
 				numStr = str;
 			};
@@ -1513,6 +1515,7 @@
 			};
 			introStart = () => {
 				introTl = gsap.timeline({ onComplete: finish });
+				introTl.timeScale(0.7); // 인트로 전체 속도 (1 = 원래, 낮을수록 느림)
 				introTl
 					.from([$(".i2-meta"), $(".i2-bar")], { y: 16, autoAlpha: 0, duration: 0.5, ease: "power3.out", stagger: 0.06 }, 0.1)
 					// 1) 로딩: 0 → 100% (4·8의 배수 단계로 숫자가 바뀜) — 도형은 진행에 맞춰 4각 → … → 원 → 4각으로 부드럽게 이어서 변형
