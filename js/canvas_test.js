@@ -180,12 +180,38 @@
 		if (!document.fonts.check(fk)) document.fonts.load(fk).then(() => drawTitle(W, H), () => {});
 	}
 
-	// [TEST] 줄별 등장 진행도 0~1
-	const introLines = lines.map(() => ({ p: CFG.fx.intro ? 0 : 1 }));
+	// [TEST] 글자별 애니메이션 — 기존 PROJECT 타이틀(project_featured.js)과 같은 방식
+	//   v: -1 = 아래 마스크 밖(+10°) / 0 = 제자리 / 1 = 위 마스크 밖(-10°)  (yPercent ±100 + rotation ±10°)
+	const titleChars = lines.map((ln, i) => Array.from(ln + (i === lines.length - 1 ? pointText : "")).map(() => ({ v: CFG.fx.intro ? -1 : 0 })));
+	const titleFlat = titleChars.flat();
+	const projChars = Array.from(projText).map(() => ({ v: -1 }));
+	let txtDirty = false; // 트윈 중이면 다음 프레임에 다시 그림
+	// 한 줄을 글자별로: 줄마다 마스크(clip) 안에서 글자가 위·아래로 이동 + 회전
+	function drawCharsLine(ctx, str, x, y, states, colorAt, capH, fs, lh, W) {
+		ctx.save();
+		ctx.beginPath();
+		ctx.rect(0, y - capH - fs * 0.2, W, capH + fs * 0.45);
+		ctx.clip();
+		for (let k = 0; k < str.length; k++) {
+			const v = states[k].v;
+			const ch = str[k];
+			if (Math.abs(v) >= 1 || ch === " ") continue;
+			const cx = x + ctx.measureText(str.slice(0, k)).width;
+			const cw = ctx.measureText(ch).width;
+			ctx.save();
+			// 글자 가운데 기준 회전 (CSS transform-origin: center와 동일)
+			ctx.translate(cx + cw / 2, y - capH / 2 - v * lh * 1.1);
+			ctx.rotate((-v * 10 * Math.PI) / 180);
+			ctx.fillStyle = colorAt(k);
+			ctx.fillText(ch, -cw / 2, capH / 2);
+			ctx.restore();
+		}
+		ctx.restore();
+	}
 	function drawTitle(W, H) {
 		const nw = Math.max(2, Math.floor(W * DPR)),
 			nh = Math.max(2, Math.floor(H * DPR));
-		if (tc.width !== nw) tc.width = nw; // 크기가 같으면 재할당 안 함 (인트로 중 매 프레임 다시 그리므로)
+		if (tc.width !== nw) tc.width = nw; // 크기가 같으면 재할당 안 함 (애니메이션 중 매 프레임 다시 그리므로)
 		if (tc.height !== nh) tc.height = nh;
 		tctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 		// 배경색·그라데이션은 셰이더에서 칠함 (마우스 추적) → 여기선 글자만 투명 캔버스에
@@ -216,26 +242,14 @@
 						? W - w - CFG.textX
 						: W / 2 - w / 2 + CFG.textX;
 			const y = firstBase + lh * i;
-			// [TEST] 줄마다 마스크 안에서 아래 → 위로 올라옴
-			const p = introLines[i].p;
-			if (p <= 0) return;
-			const yy = y + (1 - p) * lh;
-			tctx.save();
-			tctx.beginPath();
-			tctx.rect(0, y - capH - fs * 0.2, W, capH + fs * 0.45);
-			tctx.clip();
-			tctx.fillStyle = CFG.textColor;
-			tctx.fillText(ln, x, yy);
-			if (w2) {
-				tctx.fillStyle = CFG.pointColor;
-				tctx.fillText(pointText, x + w1, yy);
-			}
-			tctx.restore();
+			const str = ln + (isLast ? pointText : "");
+			// 마지막 줄 끝 포인트(.)는 pointColor
+			drawCharsLine(tctx, str, x, y, titleChars[i], (k) => (k >= ln.length ? CFG.pointColor : CFG.textColor), capH, fs, lh, W);
 		});
 		textTex.needsUpdate = true;
 	}
 
-	// [TEST] PROJECT 글자: 타이틀과 같은 폰트·크기로 화면 가운데
+	// [TEST] PROJECT 글자: 타이틀과 같은 폰트·크기로 화면 가운데, 글자별로 아래에서 회전하며 올라옴
 	function drawProj(W, H) {
 		const nw = Math.max(2, Math.floor(W * DPR)),
 			nh = Math.max(2, Math.floor(H * DPR));
@@ -245,10 +259,11 @@
 		pctx.clearRect(0, 0, W, H);
 		const fs = !sizePx && W <= 1024 ? (W * CFG.textSizeM) / 100 : CFG.textSize;
 		pctx.font = `${CFG.textWeight} ${fs}px ${CFG.fontFamily}, "Arial Black", sans-serif`;
-		pctx.textAlign = "center";
-		pctx.textBaseline = "middle";
-		pctx.fillStyle = CFG.textColor;
-		pctx.fillText(projText, W / 2, H / 2);
+		pctx.textAlign = "left";
+		pctx.textBaseline = "alphabetic";
+		const capH = pctx.measureText("H").actualBoundingBoxAscent || fs * 0.72;
+		const w = pctx.measureText(projText).width;
+		drawCharsLine(pctx, projText, W / 2 - w / 2, H / 2 + capH / 2, projChars, () => CFG.textColor, capH, fs, fs * CFG.lineHeight, W);
 		projTex.needsUpdate = true;
 	}
 
@@ -261,9 +276,7 @@
 	const rip = { value: new THREE.Vector3(0, 0, 99) }; // x, y(px), 경과 시간
 	const textShift = { value: 0 };
 	const textA = { value: 1 };
-	const suck = { value: 0 }; // 타이틀 빨려 들어감 0~1
-	const rise = { value: 0 }; // PROJECT 올라옴 0~1
-	const projA = { value: 0 }; // PROJECT 투명도
+	const projA = { value: 1 }; // PROJECT 투명도 (카드가 올라오면 사라짐)
 	// 색 + 투명도 파싱: "rgba(r,g,b,a)" / "#rrggbbaa" / 일반 색 → { color, alpha }
 	function parseRGBA(str) {
 		const s = String(str || "").trim();
@@ -277,31 +290,6 @@
 		return { color: new THREE.Color(s || "#000"), alpha: 1 };
 	}
 	const bg2 = parseRGBA(CFG.bgColor2);
-	// [TEST] 빨려 들어가는 왜곡 (배경 타이틀·PROJECT 공용)
-	const SUCK_GLSL = `
-      // ss 0 = 제자리, 1 = 위로 완전히 빨려 나감 / flip 1 = 위아래 반대(아래로 빠짐 = 아래에서 올라옴의 역재생)
-      vec2 suckUV(vec2 uv, float ss, float flip){
-        if (flip > 0.5) uv.y = 1.0 - uv.y;
-        float pinch = ss * 0.8 * clamp(uv.y, 0.0, 1.0); // 빨려 가는 쪽일수록 가로로 모임
-        uv.x = 0.5 + (uv.x - 0.5) / max(1.0 - pinch, 0.05);
-        uv.y = (uv.y - ss * 0.55) / (1.0 + ss * 1.6); // 위로 이동 + 세로로 늘어남
-        if (flip > 0.5) uv.y = 1.0 - uv.y;
-        return uv;
-      }
-      vec4 texIn(sampler2D t, vec2 uv){
-        if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return vec4(0.0);
-        vec4 c = texture2D(t, uv);
-        return vec4(c.rgb * c.a, c.a); // 프리멀티플라이 (평균 낼 때 가장자리가 어두워지지 않게)
-      }
-      // 진행도 s(0~1)를 가속(제곱)해서 쓰고, 뒤따르는 꼬리 16샘플을 평균 → 모션 블러
-      vec4 sampleSuck(sampler2D t, vec2 uv, float s, float flip){
-        float ss = s * s;
-        if (ss < 0.0005) return texIn(t, uv);
-        vec4 a = vec4(0.0);
-        for (int i = 0; i < 16; i++) a += texIn(t, suckUV(uv, ss * (1.0 - float(i) / 15.0 * 0.3), flip));
-        return a / 16.0;
-      }
-    `;
 	const bgMat = new THREE.ShaderMaterial({
 		uniforms: {
 			tText: { value: textTex },
@@ -321,14 +309,12 @@
 			uDpr: { value: DPR },
 			uShift: textShift,
 			uTextA: textA,
-			uSuck: suck,
 		},
 		vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
 		fragmentShader: `
       uniform sampler2D tText; uniform vec2 uRes, uGlow, uLens; uniform vec3 uBg1, uBg2, uRip;
-      uniform float uHas2, uGlowSize, uBg2A, uLensAmt, uLensR, uRipAmt, uDpr, uShift, uTextA, uSuck;
+      uniform float uHas2, uGlowSize, uBg2A, uLensAmt, uLensR, uRipAmt, uDpr, uShift, uTextA;
       varying vec2 vUv;
-      ${SUCK_GLSL}
       vec4 tex(vec2 uv){
         if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return vec4(0.0);
         return texture2D(tText, uv);
@@ -358,12 +344,11 @@
         vec2 uv = (p + off) / uRes;
         // 왜곡된 만큼 RGB 갈라짐
         vec2 sp = off / uRes * 0.18;
-        // 스크롤하면 타이틀이 위로 빨려 들어감 (uSuck)
-        vec4 ta = sampleSuck(tText, uv + sp, uSuck, 0.0), tb = sampleSuck(tText, uv, uSuck, 0.0), tc = sampleSuck(tText, uv - sp, uSuck, 0.0);
+        vec4 ta = tex(uv + sp), tb = tex(uv), tc = tex(uv - sp);
         vec3 col = vec3(
-          bg.r * (1.0 - ta.a * uTextA) + ta.r * uTextA,
-          bg.g * (1.0 - tb.a * uTextA) + tb.g * uTextA,
-          bg.b * (1.0 - tc.a * uTextA) + tc.b * uTextA);
+          mix(bg.r, ta.r, ta.a * uTextA),
+          mix(bg.g, tb.g, tb.a * uTextA),
+          mix(bg.b, tc.b, tc.a * uTextA));
         gl_FragColor = vec4(col, 1.0);
       }`,
 		depthTest: false,
@@ -375,15 +360,13 @@
 
 	// [TEST] PROJECT 오버레이: 유리 도형 앞에 그림 (굴절 안 됨)
 	const projMat = new THREE.ShaderMaterial({
-		uniforms: { tProj: { value: projTex }, uRes: res, uRise: rise, uProjA: projA },
+		uniforms: { tProj: { value: projTex }, uRes: res, uProjA: projA },
 		vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
 		fragmentShader: `
-      uniform sampler2D tProj; uniform vec2 uRes; uniform float uRise, uProjA;
-      ${SUCK_GLSL}
+      uniform sampler2D tProj; uniform vec2 uRes; uniform float uProjA;
       void main(){
-        // uRise 0 = 아래로 빨려 나간 상태 → 1 = 제자리 (빨려 들어가는 효과의 역재생)
-        vec4 c = sampleSuck(tProj, gl_FragCoord.xy / uRes, 1.0 - uRise, 1.0);
-        gl_FragColor = vec4(c.rgb / max(c.a, 1e-4), c.a * uProjA);
+        vec4 c = texture2D(tProj, gl_FragCoord.xy / uRes);
+        gl_FragColor = vec4(c.rgb, c.a * uProjA);
       }`,
 		transparent: true,
 		depthTest: false,
@@ -921,7 +904,16 @@
 	/* ---------- [TEST] 추가 인터랙션 ---------- */
 	const FX = CFG.fx;
 	const FXON = !reduce;
-	// 1) 인트로: 타이틀 줄별 상승 + 도형 스케일/회전 등장
+	// 글자 이징: 기존 PROJECT 타이틀과 동일 (lusion = cubic-bezier(.35, 0, 0, 1)), 글자당 0.67초 · 1/30초 간격
+	let EASE_L = "power4.out";
+	if (window.gsap && window.CustomEase) {
+		gsap.registerPlugin(CustomEase);
+		EASE_L = CustomEase.create("lusionTitle", "M0,0 C0.35,0 0,1 1,1");
+	}
+	const CH_DUR = 1 / 1.5,
+		CH_STAG = 1 / 30;
+	const markDirty = () => (txtDirty = true);
+	// 1) 인트로: 타이틀 글자별로 아래에서 회전하며 올라옴 + 도형 스케일/회전 등장
 	const intro = { s: 1, spin: 0 };
 	let introStart = null,
 		frame = 0;
@@ -930,11 +922,11 @@
 		intro.spin = -2.4;
 		// 첫 프레임(셰이더 컴파일로 멈칫함)이 지난 뒤 시작 → 느린 기기에서도 앞부분이 잘리지 않음
 		introStart = () => {
-			gsap.to(introLines, { p: 1, duration: 1.3, ease: "expo.out", stagger: 0.14, delay: 0.2, onUpdate: () => drawTitle(W, H) });
+			if (!titleOut) gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, delay: 0.2, onUpdate: markDirty });
 			gsap.to(intro, { s: 1, spin: 0, duration: 2, ease: "expo.out", delay: 0.05 });
 		};
 	} else {
-		introLines.forEach((o) => (o.p = 1));
+		titleFlat.forEach((o) => (o.v = 0));
 		drawTitle(W, H);
 	}
 	// 2) 렌즈: 캔버스 안에 마우스가 있을 때만 켜짐
@@ -959,6 +951,26 @@
 	// 4) 스크롤: 캔버스는 화면에 고정, 페이지 스크롤 양(화면 높이 단위)과 속도만 읽음
 	//    0 = 맨 위, 1 = 프로젝트 섹션이 화면을 덮은 시점, 그 뒤로도 계속 증가
 	const scr = { t: 0, p: 0, v: 0, vs: 0, last: window.scrollY };
+	// 일정 이상 스크롤하면: 타이틀 글자들이 위로 회전하며 빠지고 → PROJECT 글자들이 아래에서 회전하며 올라옴
+	// 다시 올리면 반대로 (PROJECT 아래로 빠짐 → 타이틀이 위에서 내려옴)
+	let titleOut = false;
+	function setTitleOut(o) {
+		if (o === titleOut || !window.gsap) return;
+		titleOut = o;
+		gsap.killTweensOf(titleFlat);
+		gsap.killTweensOf(projChars);
+		if (o) {
+			gsap.to(titleFlat, { v: 1, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
+			gsap.to(projChars, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, delay: 0.3, onUpdate: markDirty });
+		} else {
+			gsap.to(projChars, { v: -1, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
+			gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, delay: 0.2, onUpdate: markDirty });
+		}
+	}
+	const checkTitle = (t) => {
+		if (t > 0.12) setTitleOut(true);
+		else if (t < 0.06) setTitleOut(false);
+	};
 	if (FX.scroll && FXON) {
 		document.documentElement.classList.add("has-proj-fx"); // 캔버스가 PROJECT를 그리므로 DOM 제목은 CSS로 숨김
 		window.addEventListener(
@@ -966,11 +978,17 @@
 			() => {
 				const y = window.scrollY;
 				scr.t = y / (window.innerHeight || 1);
+				checkTitle(scr.t);
 				scr.v = Math.min(1, scr.v + Math.abs(y - scr.last) / 400);
 				scr.last = y;
 			},
 			{ passive: true },
 		);
+	}
+	// 새로고침 시 스크롤이 내려가 있으면 바로 PROJECT 상태로
+	if (FX.scroll && FXON) {
+		scr.t = window.scrollY / (window.innerHeight || 1);
+		checkTitle(scr.t);
 	}
 	const par = { x: 0, y: 0 };
 	const qFx = new THREE.Quaternion(),
@@ -1043,15 +1061,14 @@
 		par.x += (mouse.x * FX.parallax * m - par.x) * 0.06;
 		par.y += (-mouse.y * FX.parallax * 0.6 * m - par.y) * 0.06;
 		prism.position.set(par.x, par.y + sp * 0.2, sp * 1.2);
-		// 타이틀: 스크롤하면 위로 올라가며 사라짐
-		// 타이틀: 0 → 0.6화면 스크롤 동안 위로 빨려 들어가며 사라짐
-		const s1 = Math.min(1, scr.p / 0.6);
-		suck.value = s1;
-		textA.value = 1 - Math.max(0, (s1 - 0.7) / 0.3);
-		// PROJECT: 0.45 → 1화면 동안 아래에서 빨려 올라와 자리 잡고, 카드가 올라오는 동안(1.6 → 2.1) 사라짐
-		const r1 = Math.min(1, Math.max(0, (scr.p - 0.45) / 0.55));
-		rise.value = r1;
-		projA.value = Math.min(1, r1 / 0.3) * (1 - Math.min(1, Math.max(0, (scr.p - 1.6) / 0.5)));
+		// 글자 애니메이션 중이면 타이틀·PROJECT 다시 그림
+		if (txtDirty) {
+			txtDirty = false;
+			drawTitle(W, H);
+			drawProj(W, H);
+		}
+		// PROJECT: 카드가 올라오는 동안(1.6 → 2.1화면) 서서히 사라짐
+		projA.value = 1 - Math.min(1, Math.max(0, (scr.p - 1.6) / 0.5));
 		// 스크롤 속도만큼 무지개 번짐
 		backMat.uniforms.uChroma.value = frontMat.uniforms.uChroma.value = CFG.chroma + scr.vs * FX.scrollChroma;
 		// 렌즈 위치·세기
@@ -1078,7 +1095,7 @@
 		renderer.render(bgScene, orthoCam);
 		prism.material = frontMat;
 		renderer.render(scene, camera);
-		if (projA.value > 0.001) renderer.render(projScene, orthoCam); // [TEST]
+		if (projA.value > 0.001 && projChars.some((c) => c.v > -1)) renderer.render(projScene, orthoCam); // [TEST]
 	}
 	tick();
 })();
