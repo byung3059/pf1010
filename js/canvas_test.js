@@ -83,6 +83,7 @@
 			scroll: true, // 스크롤하면 도형 회전·확대 + 타이틀 위로 사라짐 (#project_visual 높이 필요)
 			scrollChroma: 1.2, // 스크롤 속도만큼 무지개 번짐 증가
 			autoMorph: 3, // 자동 변형 간격(초): 변형이 시작되는 시점끼리의 간격 (0 = 끔, 클릭 변형은 그대로)
+			flow: false, // true = 멈춤 없이 계속 이어서 변형 (autoMorph 간격 무시, 변형 시간 = morph)
 			spin: 0.6, // 도형이 계속 도는 속도(라디안/초, 세로축) — 0 = 기존처럼 살짝 흔들리기만
 			flute: 8, // 유리 칸막이(가로·세로 골 유리)에서 이미지가 어긋나는 최대 거리(px) — 글자·도형 앞에 화면 전체로 깔림 (0 = 끔)
 			fluteWidth: 40, // 골 하나의 폭(px)
@@ -922,7 +923,8 @@
 			stage.end = t; // [TEST] 자동 변형 대기 시작 시점
 			return { from: stage.from, to: stage.to, u: 0 };
 		}
-		return { from: stage.from, to: stage.to, u: ease(c) };
+		// [TEST] flow: 멈춤 없이 이어서 변형 → 등속(선형)으로 진행해야 도형 사이에서 멈칫하지 않음
+		return { from: stage.from, to: stage.to, u: CFG.fx.flow ? c : ease(c) };
 	}
 
 	// 도형 히트 테스트 (앞/뒷면 모두)
@@ -1163,7 +1165,7 @@
 		// [TEST] 자동 변형: 대기 시간이 지나면 다음 도형으로 (드래그 중·인트로 중엔 기다림, 클릭하면 타이머 초기화)
 		if (stage.last === undefined) stage.last = t; // 마지막 변형 시작 시점 (클릭으로 시작해도 갱신)
 		if (stage.start >= 0 && stage.start !== stage.last) stage.last = stage.start;
-		if (!reduce && FX.autoMorph > 0 && stage.start < 0 && !drag.on && intro.done && t - stage.last >= FX.autoMorph) stage.start = stage.last = t;
+		if (!reduce && FX.autoMorph > 0 && stage.start < 0 && !drag.on && intro.done && (FX.flow || t - stage.last >= FX.autoMorph)) stage.start = stage.last = t; // flow면 끝나자마자 다음
 		const st = reduce ? { from: START, to: (START + 1) % SHAPES.length, u: 0 } : stageAt(t);
 		if (st.from !== curFrom) {
 			setPair(st.from, st.to);
@@ -1196,7 +1198,7 @@
 			kick.amt = ((Math.PI * 2) / (SIDES[st.to] || 48)) * kick.dir * (1 + Math.abs(mouse.x) * 0.8);
 			kick.tiltDir = mouse.y < 0 ? -1 : 1;
 		}
-		const bump = Math.sin(u * Math.PI);
+		const bump = Math.sin(u * Math.PI) * (FX.flow ? 0.35 : 1); // flow일 때는 단계마다 출렁임을 약하게
 		eA.set(pose[0] + bump * 0.35 * kick.tiltDir * m, pose[1], pose[2]);
 		prism.quaternion.setFromEuler(eA);
 		qA.setFromAxisAngle(AZ, (kick.acc + kick.amt * u) * m); // 너트 면(정면) 축으로 회전
@@ -1240,7 +1242,7 @@
 		rip.value.z = Math.min(99, t - ripStart);
 
 		// 변형 중간에 살짝 커졌다 돌아오는 탄성 (+ 인트로 스케일)
-		prism.scale.setScalar((1 + Math.sin(u * Math.PI) * 0.1) * intro.s);
+		prism.scale.setScalar((1 + bump * 0.1) * intro.s);
 		prism.scale.z *= intro.depth; // [TEST] 만들어질 때 두께 0 → 1
 
 		renderer.setRenderTarget(rtBg);

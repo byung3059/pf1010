@@ -138,11 +138,11 @@
 					480: { textSizeM: 13 }, // 아주 작은 화면은 조금 키움
 				},
 
-				fx: { scrollChroma: 0, backBright: 0.65, autoMorph: 2.4, ripple: 0 }, // autoMorph 2.4 = 2.4초마다 다음 도형 (4→6→8→12→16→24→32→40각→원→반복, 클릭해도 넘어감) / ripple 0 = 클릭 물결 끔
+				fx: { scrollChroma: 0, backBright: 0.65, autoMorph: 2.4, flow: true, ripple: 0 }, // flow true = 멈춤 없이 계속 이어서 변형 (4→6→8→12→16→24→32→40각→원→반복) / false면 autoMorph초마다 / ripple 0 = 클릭 물결 끔
 				// [TEST] scrollChroma 0 = 스크롤해도 무지개 번짐 없음 / backBright = 뒷면이 비쳐 보이는 정도
 
 				hold: 1, // 도형 유지 시간(초)
-				morph: 1.6, // 변형 시간(초)
+				morph: 2.2, // 변형 시간(초) — flow일 때 도형 하나에서 다음 도형까지 걸리는 시간
 				dragSpeed: 0.008, // 드래그 회전 감도 (클수록 조금만 끌어도 많이 돎)
 				dragInertia: 0.95, // 놓은 뒤 관성 0~1 (1에 가까울수록 오래 돎, 0 = 바로 멈춤)
 
