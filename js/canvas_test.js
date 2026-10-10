@@ -1100,92 +1100,173 @@
 		const fluteTarget = { s: fluteMat.uniforms.uShift.value, t: fluteMat.uniforms.uShiftT.value };
 		fluteMat.uniforms.uShift.value = fluteMat.uniforms.uShiftT.value = 0;
 
-		// 선은 화면 맨 위 2D 캔버스에 그림 (헤더보다 아래)
-		const ov = document.createElement("canvas");
-		ov.style.cssText = "position:fixed;inset:0;width:100%;height:100%;z-index:50;pointer-events:none;";
-		document.body.appendChild(ov);
-		const oc = ov.getContext("2d");
-		const G = CFG.fx.fluteWidth || 40;
-		const L = { draw: 0, alpha: 1 }; // draw: 그어진 쌍 수(0~1 비율), alpha: 선 투명도 배율
-		function drawLines() {
-			const w = window.innerWidth,
-				h = window.innerHeight,
-				d = Math.min(window.devicePixelRatio || 1, 2);
-			if (ov.width !== Math.floor(w * d)) ov.width = Math.floor(w * d);
-			if (ov.height !== Math.floor(h * d)) ov.height = Math.floor(h * d);
-			oc.setTransform(d, 0, 0, d, 0, 0);
-			oc.clearRect(0, 0, w, h);
-			if (L.draw <= 0 || L.alpha <= 0) return;
-			const cx = w / 2,
-				cy = h / 2;
-			const nMax = Math.ceil(Math.max(w, h) / 2 / G) + 1;
-			const step = L.draw * nMax; // 가운데에서 몇 번째 쌍까지 그어졌는지
-			// n번째 쌍(가운데에서 n칸)의 그어진 정도 0~1 → 가운데에서 양 끝으로 뻗음
-			const q = (dist) => {
-				const v = Math.min(1, Math.max(0, (step - Math.floor(dist / G)) * 1.2));
-				return 1 - Math.pow(1 - v, 3);
-			};
-			oc.strokeStyle = `rgba(255,255,255,${LINE_A * L.alpha})`;
-			oc.lineWidth = 1;
-			oc.beginPath();
-			// 세로선: 칸막이 셰이더와 같은 기준 (왼쪽에서 G 간격)
-			for (let x = G; x < w; x += G) {
-				const e = q(Math.abs(x - cx));
-				if (e <= 0) continue;
-				const X = Math.round(x) + 0.5;
-				oc.moveTo(X, cy);
-				oc.lineTo(X, cy - (h / 2) * e);
-				oc.moveTo(X, cy);
-				oc.lineTo(X, cy + (h / 2) * e);
+		// 인트로 선택: GLASS_CONFIG.fx.introType (1 | 2), 주소 끝에 #intro1 / #intro2를 붙이면 그걸로
+		const INTRO = location.hash === "#intro1" ? 1 : location.hash === "#intro2" ? 2 : CFG.fx.introType === 1 ? 1 : 2;
+		if (INTRO === 1) {
+		// ───────── 인트로 1: 선 → 칸 단위 등장 → 멈춤 → 칸막이 효과 ─────────
+			// 선은 화면 맨 위 2D 캔버스에 그림 (헤더보다 아래)
+			const ov = document.createElement("canvas");
+			ov.style.cssText = "position:fixed;inset:0;width:100%;height:100%;z-index:50;pointer-events:none;";
+			document.body.appendChild(ov);
+			const oc = ov.getContext("2d");
+			const G = CFG.fx.fluteWidth || 40;
+			const L = { draw: 0, alpha: 1 }; // draw: 그어진 쌍 수(0~1 비율), alpha: 선 투명도 배율
+			function drawLines() {
+				const w = window.innerWidth,
+					h = window.innerHeight,
+					d = Math.min(window.devicePixelRatio || 1, 2);
+				if (ov.width !== Math.floor(w * d)) ov.width = Math.floor(w * d);
+				if (ov.height !== Math.floor(h * d)) ov.height = Math.floor(h * d);
+				oc.setTransform(d, 0, 0, d, 0, 0);
+				oc.clearRect(0, 0, w, h);
+				if (L.draw <= 0 || L.alpha <= 0) return;
+				const cx = w / 2,
+					cy = h / 2;
+				const nMax = Math.ceil(Math.max(w, h) / 2 / G) + 1;
+				const step = L.draw * nMax; // 가운데에서 몇 번째 쌍까지 그어졌는지
+				// n번째 쌍(가운데에서 n칸)의 그어진 정도 0~1 → 가운데에서 양 끝으로 뻗음
+				const q = (dist) => {
+					const v = Math.min(1, Math.max(0, (step - Math.floor(dist / G)) * 1.2));
+					return 1 - Math.pow(1 - v, 3);
+				};
+				oc.strokeStyle = `rgba(255,255,255,${LINE_A * L.alpha})`;
+				oc.lineWidth = 1;
+				oc.beginPath();
+				// 세로선: 칸막이 셰이더와 같은 기준 (왼쪽에서 G 간격)
+				for (let x = G; x < w; x += G) {
+					const e = q(Math.abs(x - cx));
+					if (e <= 0) continue;
+					const X = Math.round(x) + 0.5;
+					oc.moveTo(X, cy);
+					oc.lineTo(X, cy - (h / 2) * e);
+					oc.moveTo(X, cy);
+					oc.lineTo(X, cy + (h / 2) * e);
+				}
+				// 가로선: 셰이더는 아래에서 G 간격 → 화면 좌표로 뒤집음
+				for (let yb = G; yb < h; yb += G) {
+					const y = h - yb;
+					const e = q(Math.abs(y - cy));
+					if (e <= 0) continue;
+					const Y = Math.round(y) + 0.5;
+					oc.moveTo(cx, Y);
+					oc.lineTo(cx - (w / 2) * e, Y);
+					oc.moveTo(cx, Y);
+					oc.lineTo(cx + (w / 2) * e, Y);
+				}
+				oc.stroke();
 			}
-			// 가로선: 셰이더는 아래에서 G 간격 → 화면 좌표로 뒤집음
-			for (let yb = G; yb < h; yb += G) {
-				const y = h - yb;
-				const e = q(Math.abs(y - cy));
-				if (e <= 0) continue;
-				const Y = Math.round(y) + 0.5;
-				oc.moveTo(cx, Y);
-				oc.lineTo(cx - (w / 2) * e, Y);
-				oc.moveTo(cx, Y);
-				oc.lineTo(cx + (w / 2) * e, Y);
-			}
-			oc.stroke();
-		}
 
-		let introTl = null;
-		const finish = () => {
-			intro.done = true;
-			stage.last = clock.getElapsedTime();
-			gsap.ticker.remove(drawLines);
-			ov.remove();
+			let introTl = null;
+			const finish = () => {
+				intro.done = true;
+				stage.last = clock.getElapsedTime();
+				gsap.ticker.remove(drawLines);
+				ov.remove();
+				reveal.value = 999;
+			};
+			// 첫 프레임(셰이더 컴파일로 멈칫함)이 지난 뒤 시작
+			introStart = () => {
+				gsap.ticker.add(drawLines);
+				introTl = gsap.timeline({ onComplete: finish });
+				introTl
+					// 1) 선: 가운데 쌍부터 두 줄씩
+					.to(L, { draw: 1, duration: 1.8, ease: "power1.inOut" }, 0.2)
+					// 2) 도형: 완성된 유리 도형이 선의 40px 칸을 따라 가운데 칸부터 바깥으로 '착착' 나타남 (막 나타난 칸은 번쩍) — 나타나면서부터 계속 돎
+					.add(() => (intro.spinOn = true), 1.9)
+					.to(reveal, { value: 16, duration: 1.1, ease: "power2.out" }, 1.9)
+					.add(() => gsap.fromTo(flash, { value: 0.4 }, { value: 0, duration: 1.0, ease: "power2.out" }), 2.7)
+					// 3) 멈춤: 효과 없이 그대로 보여 줌 — 도형은 계속 돎 (약 3.0 ~ 4.2초)
+					// 4) 효과: 선이 사라지는 만큼 칸막이 효과가 차오름
+					.to(L, { alpha: 0, duration: 1.0, ease: "power2.inOut" }, 4.2)
+					.to(fluteMat.uniforms.uShift, { value: fluteTarget.s, duration: 1.0, ease: "power2.inOut" }, 4.2)
+					.to(fluteMat.uniforms.uShiftT, { value: fluteTarget.t, duration: 1.0, ease: "power2.inOut" }, 4.2)
+					.to(intro, { face: 0, duration: 2.0, ease: "expo.out" }, 4.6) // 평소 자세로
+					.add(() => {
+						if (!titleOut) gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
+					}, 5.0) // 타이틀
+					.to(hdr, { autoAlpha: 1, y: 0, duration: 0.6, ease: "power4.out", stagger: 0.05 }, 5.3); // 헤더
+			};
+			// 인트로 중 클릭하면 끝으로 건너뜀
+			window.addEventListener("click", () => {
+				if (introTl && !intro.done) introTl.progress(1);
+			});
+		} else {
+			// ───────── 인트로 2: 로딩 카운터 → 가로 슬릿이 열리며 장면 등장 ─────────
+			// 해외 포트폴리오(Awwwards 수상작들 — 예: lusion.co, locomotive.ca 같은 스튜디오 사이트)에서 흔한 구성을 참고:
+			//   큰 숫자 로딩 카운터 + 화면을 가로지르는 1px 진행선 → 100이 되면 진행선이 슬릿처럼 위아래로 갈라지며 장면이 열림
+			//   → 그 틈으로 유리 오브젝트가 멀리서 빠르게 돌며 날아와 제자리에 딱 멈춤 → 칸막이 효과 → 타이틀 → 헤더
 			reveal.value = 999;
-		};
-		// 첫 프레임(셰이더 컴파일로 멈칫함)이 지난 뒤 시작
-		introStart = () => {
-			gsap.ticker.add(drawLines);
-			introTl = gsap.timeline({ onComplete: finish });
-			introTl
-				// 1) 선: 가운데 쌍부터 두 줄씩
-				.to(L, { draw: 1, duration: 1.8, ease: "power1.inOut" }, 0.2)
-				// 2) 도형: 완성된 유리 도형이 선의 40px 칸을 따라 가운데 칸부터 바깥으로 '착착' 나타남 (막 나타난 칸은 번쩍) — 나타나면서부터 계속 돎
-				.add(() => (intro.spinOn = true), 1.9)
-				.to(reveal, { value: 16, duration: 1.1, ease: "power2.out" }, 1.9)
-				.add(() => gsap.fromTo(flash, { value: 0.4 }, { value: 0, duration: 1.0, ease: "power2.out" }), 2.7)
-				// 3) 멈춤: 효과 없이 그대로 보여 줌 — 도형은 계속 돎 (약 3.0 ~ 4.2초)
-				// 4) 효과: 선이 사라지는 만큼 칸막이 효과가 차오름
-				.to(L, { alpha: 0, duration: 1.0, ease: "power2.inOut" }, 4.2)
-				.to(fluteMat.uniforms.uShift, { value: fluteTarget.s, duration: 1.0, ease: "power2.inOut" }, 4.2)
-				.to(fluteMat.uniforms.uShiftT, { value: fluteTarget.t, duration: 1.0, ease: "power2.inOut" }, 4.2)
-				.to(intro, { face: 0, duration: 2.0, ease: "expo.out" }, 4.6) // 평소 자세로
-				.add(() => {
-					if (!titleOut) gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
-				}, 5.0) // 타이틀
-				.to(hdr, { autoAlpha: 1, y: 0, duration: 0.6, ease: "power4.out", stagger: 0.05 }, 5.3); // 헤더
-		};
-		// 인트로 중 클릭하면 끝으로 건너뜀
-		window.addEventListener("click", () => {
-			if (introTl && !intro.done) introTl.progress(1);
-		});
+			intro.s = 0.18; // 멀리서 작게
+			intro.spin = -4.2; // 빠르게 돌며
+			intro.rx = 0.4;
+			intro.ry = -0.55;
+			intro.face = 1;
+			intro.spinOn = false;
+			const font = `"${CFG.fontFamily}", "Unbounded", sans-serif`;
+			const box = document.createElement("div");
+			box.className = "intro2";
+			box.innerHTML = `
+				<div class="i2-panel i2-top"></div>
+				<div class="i2-panel i2-bot"></div>
+				<div class="i2-line"></div>
+				<div class="i2-meta"><span>Portfolio</span><span>©2026</span></div>
+				<div class="i2-count"><span class="i2-num">000</span><span class="i2-pct">%</span></div>`;
+			const css = document.createElement("style");
+			css.textContent = `
+				.intro2 { position: fixed; inset: 0; z-index: 60; pointer-events: none; color: #fff; font-family: ${font}; }
+				.intro2 .i2-panel { position: absolute; left: 0; width: 100%; height: 50%; background: #000; }
+				.intro2 .i2-top { top: 0; }
+				.intro2 .i2-bot { bottom: 0; }
+				.intro2 .i2-line { position: absolute; left: 0; top: 50%; width: 100%; height: 1px; background: #fff; transform-origin: 0 50%; transform: scaleX(0); }
+				.intro2 .i2-meta { position: absolute; left: 40px; right: 40px; top: calc(50% - 32px); display: flex; justify-content: space-between; font-size: 12px; line-height: 16px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.56; }
+				.intro2 .i2-count { position: absolute; right: 40px; bottom: 40px; display: flex; align-items: flex-start; gap: 8px; font-size: clamp(64px, 12vw, 200px); line-height: 0.8; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -0.04em; }
+				.intro2 .i2-pct { font-size: 0.24em; line-height: 1; opacity: 0.56; }
+				@media (max-width: 768px) { .intro2 .i2-meta { left: 16px; right: 16px; } .intro2 .i2-count { right: 16px; bottom: 24px; } }`;
+			document.head.appendChild(css);
+			document.body.appendChild(box);
+			const $ = (q) => box.querySelector(q);
+			const num = $(".i2-num");
+			const cnt = { v: 0 };
+			let introTl = null;
+			const finish = () => {
+				intro.done = true;
+				stage.last = clock.getElapsedTime();
+				box.remove();
+				css.remove();
+			};
+			introStart = () => {
+				introTl = gsap.timeline({ onComplete: finish });
+				introTl
+					// 1) 카운터 000 → 100 + 진행선 (빠르게 시작해 끝에서 살짝 느려짐, 중간에 한 번 멈칫)
+					.from([$(".i2-meta"), $(".i2-count")], { y: 24, autoAlpha: 0, duration: 0.6, ease: "power3.out", stagger: 0.08 }, 0.1)
+					.to(cnt, { v: 64, duration: 0.9, ease: "power2.in", onUpdate: () => (num.textContent = String(Math.round(cnt.v)).padStart(3, "0")) }, 0.3)
+					.to(cnt, { v: 100, duration: 0.8, ease: "power3.out", onUpdate: () => (num.textContent = String(Math.round(cnt.v)).padStart(3, "0")) }, 1.35)
+					.to($(".i2-line"), { scaleX: 0.64, duration: 0.9, ease: "power2.in" }, 0.3)
+					.to($(".i2-line"), { scaleX: 1, duration: 0.8, ease: "power3.out" }, 1.35)
+					// 2) 숫자·글자가 위로 빠지고, 진행선이 슬릿처럼 위아래로 갈라지며 장면이 열림
+					.to([$(".i2-count"), $(".i2-meta")], { y: -24, autoAlpha: 0, duration: 0.5, ease: "power3.in" }, 2.2)
+					.to($(".i2-line"), { scaleY: 0, duration: 0.6, ease: "expo.inOut" }, 2.55)
+					.to($(".i2-top"), { yPercent: -100, duration: 1.1, ease: "expo.inOut" }, 2.55)
+					.to($(".i2-bot"), { yPercent: 100, duration: 1.1, ease: "expo.inOut" }, 2.55)
+					// 3) 유리 오브젝트가 멀리서 빠르게 돌며 날아와 제자리에 딱 (같은 순간 칸막이 효과도 차오름)
+					.add(() => {
+						intro.spinOn = true;
+						gsap.fromTo(flash, { value: 0.5 }, { value: 0, duration: 1.2, ease: "power2.out" });
+					}, 2.7)
+					.to(intro, { s: 1, spin: 0, duration: 1.8, ease: "expo.out" }, 2.6)
+					.to(intro, { face: 0, duration: 2.0, ease: "expo.out" }, 3.0)
+					.to(fluteMat.uniforms.uShift, { value: fluteTarget.s, duration: 1.2, ease: "power2.out" }, 3.0)
+					.to(fluteMat.uniforms.uShiftT, { value: fluteTarget.t, duration: 1.2, ease: "power2.out" }, 3.0)
+					// 4) 타이틀 → 헤더
+					.add(() => {
+						if (!titleOut) gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
+					}, 3.3)
+					.to(hdr, { autoAlpha: 1, y: 0, duration: 0.6, ease: "power4.out", stagger: 0.05 }, 3.6);
+			};
+			window.addEventListener("click", () => {
+				if (introTl && !intro.done) introTl.progress(1);
+			});
+		}
 	} else {
 		titleFlat.forEach((o) => (o.v = 0));
 		drawTitle(W, H);
