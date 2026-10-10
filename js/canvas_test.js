@@ -1064,8 +1064,7 @@
 		// [TEST] 인트로
 		//   1) 점선 : 칸막이 골 경계와 같은 자리에 아주 옅은 점선(rgba 255,255,255,0.1)이 가운데에서 양쪽으로 쫘악 그어짐
 		//   2) 유리 : 점선이 그대로 지금의 격자 유리 칸막이로 바뀜
-		//   3) 사각 : 완전 흰색(#FFFFFF) 사각형 라인이 위 가운데에서 양쪽으로 그려짐 (너트 정면 크기 그대로)
-		//   4) 입체 : 그 흰 라인이 도형으로 바뀌며 3D로 툭 튀어나옴 (두께가 솟고 살짝 기울어 옆면) → 평소 자세 → 타이틀 → 헤더
+		//   3) 입체 : 유리 칸막이 너머에서 도형이 천천히 3D로 튀어나옴 (커지며 두께가 솟고 살짝 기울어 옆면) → 평소 자세 → 타이틀 → 헤더
 		intro.s = 1;
 		intro.spin = 0;
 		intro.depth = 0.02;
@@ -1186,21 +1185,19 @@
 				.to(S, { linesA: 0, duration: 0.8, ease: "power2.inOut" }, 1.3)
 				.to(fluteMat.uniforms.uShift, { value: fluteTarget.s, duration: 0.8, ease: "power2.inOut" }, 1.3)
 				.to(fluteMat.uniforms.uShiftT, { value: fluteTarget.t, duration: 0.8, ease: "power2.inOut" }, 1.3)
-				// 3) 흰색(#FFFFFF) 사각형 라인 — 유리 칸막이 너머로 그려짐
-				.to(S, { sq: 1, duration: 0.7, ease: "power3.inOut" }, 2.0)
-				// 4) 흰 라인이 그대로 도형이 되며 3D로 튀어나옴: 번쩍 → 두께가 앞으로 솟고 살짝 기울어 옆면이 보임
+				// 3) 유리 칸막이 너머에서 도형이 천천히 3D로 튀어나옴: 작고 납작한 상태 → 커지며 두께가 앞으로 솟고 살짝 기울어 옆면이 보임
 				.add(() => {
 					build.value = 1;
-					gsap.fromTo(flash, { value: 1 }, { value: 0, duration: 0.9, ease: "power2.out" });
-				}, 2.75)
-				.to(intro, { depth: 1, duration: 0.9, ease: "back.out(2.2)" }, 2.75)
-				.fromTo(intro, { pop: 0 }, { pop: 1, duration: 0.25, ease: "power2.out", yoyo: true, repeat: 1 }, 2.75) // 순간 툭 커졌다 돌아옴
-				.to(intro, { rx: 0.45, ry: -0.6, duration: 0.8, ease: "power3.out" }, 2.8)
-				.to(S, { sqA: 0, duration: 0.45, ease: "power2.out" }, 2.85) // 흰 라인은 유리 테두리로 녹아듦
-				.to(intro, { face: 0, duration: 1.4, ease: "expo.out" }, 3.5) // 평소 자세로
+					gsap.fromTo(flash, { value: 0.6 }, { value: 0, duration: 1.6, ease: "power2.out" }); // 은은하게 번쩍
+				}, 1.9)
+				.fromTo(intro, { s: 0.55 }, { s: 1, duration: 2.0, ease: "expo.out" }, 1.9)
+				.to(intro, { depth: 1, duration: 2.0, ease: "back.out(1.4)" }, 1.95)
+				.fromTo(intro, { pop: 0 }, { pop: 1, duration: 0.6, ease: "power2.out", yoyo: true, repeat: 1 }, 2.0) // 툭 커졌다 돌아옴 (천천히)
+				.to(intro, { rx: 0.45, ry: -0.6, duration: 1.8, ease: "power3.out" }, 2.0)
+				.to(intro, { face: 0, duration: 2.2, ease: "expo.out" }, 3.4) // 평소 자세로
 				.add(() => {
 					if (!titleOut) gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
-				}, 3.6) // 타이틀
+				}, 3.5) // 타이틀
 				.to(hdr, { autoAlpha: 1, y: 0, duration: 0.6, ease: "power4.out", stagger: 0.05 }, 3.9); // 헤더
 		};
 		// 인트로 중 클릭하면 바로 완성
