@@ -1752,7 +1752,7 @@
 		// 마우스 방향으로 따라 움직임 + 스크롤하면 카메라 쪽으로 다가옴
 		par.x += (mouse.x * FX.parallax * m - par.x) * 0.06;
 		par.y += (-mouse.y * FX.parallax * 0.6 * m - par.y) * 0.06;
-		prism.position.set(intro.px || 0, intro.py || 0, sp * 1.2); // [TEST] 화면 정가운데 고정 (인트로 3의 컷 구도만 잠깐 옮김, 스크롤하면 앞으로만 다가옴)
+		prism.position.set(intro.px || 0, intro.py || 0, 1.2); // [TEST] 화면 정가운데 고정 — 크기는 PROJECT까지 내렸을 때 크기(z 1.2)를 기본으로, 스크롤해도 그대로
 		// 글자 애니메이션 중이면 타이틀·PROJECT 다시 그림
 		if (txtDirty) {
 			txtDirty = false;
