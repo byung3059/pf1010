@@ -642,17 +642,34 @@
 
 	const morph = { value: 0 };
 	const shatter = { value: 0 }; // 조각 상태로 끌려가는 정도 (변형 중간에 최대)
+	const explode = { value: 0 }; // [TEST] 소용돌이로 흩어진 정도 (인트로 + 마우스를 빠르게 움직일 때)
+	const uTimeU = { value: 0 };
+	const mouseL = { value: new THREE.Vector2(0, 0) }; // 흩어진 조각이 쏠리는 방향 (마우스)
+	const flash = { value: 0 }; // 조각이 모여 완성되는 순간 번쩍임
 	const clear = { value: 0 };
 	const CLEAR = CFG.clear; // 도형별 투명도 (너트, 링, 큐브)
 
 	const glassVS = `
     attribute vec3 aPosB; attribute vec3 aNormB; attribute vec3 aPosX; attribute vec3 aNormX;
-    uniform float uMorph, uShatter;
+    uniform float uMorph, uShatter, uExplode, uTime;
+    uniform vec2 uMouseL;
     varying vec3 vN; varying vec3 vEye; varying vec3 vLocal;
     void main(){
       // A → B 보간 위에, 변형 중간일수록 조각 상태(X) 쪽으로 끌려감
       vec3 p = mix(mix(position, aPosB, uMorph), aPosX, uShatter);
       vec3 n = mix(mix(normal, aNormB, uMorph), aNormX, uShatter) + 1e-5;
+      // [TEST] 흩어짐(소용돌이): 조각들이 각도마다 다르게 휘감기며 바깥·앞뒤로 퍼지고, 마우스 쪽으로 쏠림
+      if (uExplode > 0.0) {
+        float e = uExplode;
+        float ang = atan(p.y, p.x);
+        float r = length(p.xy);
+        float sw = e * (2.4 + 1.6 * sin(ang * 3.0 + uTime * 1.3));
+        mat2 R = mat2(cos(sw), sin(sw), -sin(sw), cos(sw));
+        p.xy = R * p.xy * (1.0 + e * 1.8);
+        n.xy = R * n.xy;
+        p.z += e * 2.6 * sin(ang * 5.0 + r * 2.2 + uTime * 1.7);
+        p.xy += uMouseL * e * 2.2;
+      }
       vec4 wp = modelMatrix * vec4(p, 1.0);
       vN = normalize(mat3(modelMatrix) * n);
       vLocal = p; // [TEST] 만들어지는 애니메이션용 (도형 면 = 로컬 XY 평면)
@@ -661,7 +678,7 @@
     }`;
 	const glassFS = `
     uniform sampler2D uTex; uniform vec2 uRes;
-    uniform float uPower, uChroma, uSat, uShine, uFres, uSpec, uClear, uIri, uEdge, uBlur, uIriFrom, uIriDeep, uRim, uShade, uRefl, uFringe, uLRefl, uEnv, uLine, uBuild;
+    uniform float uPower, uChroma, uSat, uShine, uFres, uSpec, uClear, uIri, uEdge, uBlur, uIriFrom, uIriDeep, uRim, uShade, uRefl, uFringe, uLRefl, uEnv, uLine, uBuild, uFlash;
     uniform vec3 uLight, uTint;
     varying vec3 vN; varying vec3 vEye; varying vec3 vLocal;
     vec3 sat(vec3 c, float a){ return mix(vec3(dot(c, vec3(.2125,.7154,.0721))), c, a); }
@@ -765,6 +782,7 @@
       float bgL = dot(texture2D(uTex, gl_FragCoord.xy / uRes).rgb, vec3(0.3333));
       col += (spec * 0.9 + fres * 0.5 * (1.0 - 0.6 * uClear)) * uSpec * mix(1.0, 0.15, bgL);
       col += cutEdge * 1.4; // [TEST] 만들어지는 끝을 하얗게 (레이저로 깎는 듯한 느낌)
+      col += uFlash * (0.25 + 0.75 * pow(1.0 - abs(dot(vEye, n)), 2.0)); // [TEST] 완성 순간 테두리부터 번쩍
       gl_FragColor = vec4(col, 1.0);
     }`;
 	const makeGlass = (side, spec) =>
@@ -775,6 +793,10 @@
 				uMorph: morph,
 				uBuild: build,
 				uShatter: shatter,
+				uExplode: explode,
+				uTime: uTimeU,
+				uMouseL: mouseL,
+				uFlash: flash,
 				uClear: clear,
 				uPower: { value: CFG.refraction },
 				uChroma: { value: CFG.chroma },
@@ -1031,36 +1053,134 @@
 		CH_STAG = 1 / 30;
 	const markDirty = () => (txtDirty = true);
 	// 1) 인트로: 타이틀 글자별로 아래에서 회전하며 올라옴 + 도형 스케일/회전 등장
-	const intro = { s: 1, spin: 0, depth: 1, done: true };
+	const intro = { s: 1, spin: 0, depth: 1, done: true, shatter: 0, explode: 0, pop: 0, energy: 0 };
 	let introStart = null,
 		frame = 0;
 	if (FX.intro && FXON && window.gsap) {
-		// [TEST] 처음: 납작한 사각 테두리가 12시부터 시계 방향으로 그려지며 만들어짐 → 두께가 생기며 살짝 돌아 자리 잡음
-		//        → 타이틀 글자 등장 → 헤더 등장 → 그 뒤부터 자동 변형 시작
-		intro.s = 0.9;
-		intro.spin = -0.6;
+		// [TEST] 처음: 화면 곳곳에서 수많은 가는 선이 길게 늘어진 채 빨려 들어와 압축되며 사각 너트의 모서리 선이 됨
+		//        → 선이 다 모이면 그 자리에서 유리 몸체가 12시부터 휘감듯 차오르며 두께가 생김 → 번쩍 + 튕김
+		//        → 선은 사라지고 타이틀 글자 → 헤더 → 그 뒤부터 계속 변형
+		//        선들은 마우스 쪽으로 쏠리며 들어오고, 마우스를 빠르게 휘저으면 도형이 잠깐 흩어졌다 모임 (클릭하면 바로 완성)
+		intro.s = 0.88;
+		intro.spin = -1.4;
 		intro.depth = 0.06;
 		intro.done = false;
 		build.value = 0;
 		const hdr = document.querySelectorAll("#header .logo, #header #gnb li, #header .m_menu_btn");
 		gsap.set(hdr, { autoAlpha: 0, y: -16 });
 		document.documentElement.classList.remove("intro-pending"); // 헤더 깜빡임 방지 클래스 (test.html head에서 붙임)
+
+		// 선 만들기: 사각 너트(첫 도형)의 모서리 위 짧은 선분이 목표, 시작은 바깥 먼 곳에서 길게 늘어진 상태
+		const LINE_N = MOBILE ? 420 : 900;
+		const half = 2.1 * Math.cos(Math.PI / 4); // 사각형 반변 (도형 면 = 로컬 XY, 두께 = 로컬 Z ±0.45)
+		const lEnd = new Float32Array(LINE_N * 6),
+			lStart = new Float32Array(LINE_N * 6),
+			lDelay = new Float32Array(LINE_N * 2);
+		const rnd = (a, b) => a + Math.random() * (b - a);
+		for (let k = 0; k < LINE_N; k++) {
+			const z = Math.random() < 0.5 ? -0.45 : 0.45;
+			const len = rnd(0.25, 0.6);
+			let ax, ay, az, bx, by, bz;
+			const r = Math.random();
+			if (r < 0.55) {
+				// 바깥 사각 테두리 (앞·뒷면)
+				const side = (Math.random() * 4) | 0,
+					tt = rnd(-1, 1) * half;
+				const [px, py, tx, ty] = [
+					[tt, half, 1, 0],
+					[tt, -half, 1, 0],
+					[half, tt, 0, 1],
+					[-half, tt, 0, 1],
+				][side];
+				[ax, ay, az, bx, by, bz] = [px - (tx * len) / 2, py - (ty * len) / 2, z, px + (tx * len) / 2, py + (ty * len) / 2, z];
+			} else if (r < 0.85) {
+				// 안쪽 구멍 원 (앞·뒷면)
+				const th = rnd(0, Math.PI * 2),
+					rr = 1.18,
+					dth = len / rr / 2;
+				[ax, ay, az, bx, by, bz] = [Math.cos(th - dth) * rr, Math.sin(th - dth) * rr, z, Math.cos(th + dth) * rr, Math.sin(th + dth) * rr, z];
+			} else {
+				// 네 모서리 세로선 (두께 방향)
+				const cx = Math.random() < 0.5 ? -half : half,
+					cy = Math.random() < 0.5 ? -half : half;
+				[ax, ay, az, bx, by, bz] = [cx, cy, -0.45, cx, cy, 0.45];
+			}
+			// 시작: 무작위 방향의 먼 곳, 바깥쪽 끝이 더 멀어 길게 늘어진 선 → 들어오며 짧게 압축됨
+			let dx = rnd(-1, 1),
+				dy = rnd(-1, 1),
+				dz = rnd(-0.6, 0.6);
+			const dl = Math.hypot(dx, dy, dz) || 1;
+			dx /= dl;
+			dy /= dl;
+			dz /= dl;
+			const d0 = rnd(3, 9),
+				d1 = d0 + rnd(1.5, 6);
+			lEnd.set([ax, ay, az, bx, by, bz], k * 6);
+			lStart.set([ax + dx * d0, ay + dy * d0, az + dz * d0, bx + dx * d1, by + dy * d1, bz + dz * d1], k * 6);
+			const dly = rnd(0, 0.45);
+			lDelay[k * 2] = lDelay[k * 2 + 1] = dly;
+		}
+		const lGeo = new THREE.BufferGeometry();
+		lGeo.setAttribute("position", new THREE.BufferAttribute(lEnd, 3));
+		lGeo.setAttribute("aStart", new THREE.BufferAttribute(lStart, 3));
+		lGeo.setAttribute("aDelay", new THREE.BufferAttribute(lDelay, 1));
+		const lineU = { uP: { value: 0 }, uFade: { value: 0 }, uMouseL: mouseL };
+		const lines = new THREE.LineSegments(
+			lGeo,
+			new THREE.ShaderMaterial({
+				uniforms: lineU,
+				vertexShader: `
+          attribute vec3 aStart; attribute float aDelay;
+          uniform float uP, uFade; uniform vec2 uMouseL;
+          varying float vA;
+          void main(){
+            float q = clamp((uP - aDelay) / 0.55, 0.0, 1.0);
+            q = 1.0 - pow(1.0 - q, 3.0);                 // 빨려 들어오다 끝에서 감속
+            vec3 pos = mix(aStart, position, q);
+            pos.xy += uMouseL * (1.0 - q) * 2.5;         // 들어오는 동안 마우스 쪽으로 쏠림
+            vA = smoothstep(0.0, 0.12, q) * (0.3 + 0.7 * q) * (1.0 - uFade);
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+          }`,
+				fragmentShader: `varying float vA; void main(){ gl_FragColor = vec4(vec3(1.0), vA); }`,
+				transparent: true,
+				blending: THREE.AdditiveBlending,
+				depthTest: false,
+				depthWrite: false,
+			})
+		);
+		lines.frustumCulled = false;
+		prism.add(lines); // 도형과 같이 돌고 커짐
+
+		let introTl = null;
 		// 첫 프레임(셰이더 컴파일로 멈칫함)이 지난 뒤 시작 → 느린 기기에서도 앞부분이 잘리지 않음
 		introStart = () => {
-			const tl = gsap.timeline({
+			introTl = gsap.timeline({
 				onComplete: () => {
 					intro.done = true;
-					stage.last = clock.getElapsedTime(); // 다 만들어진 뒤부터 자동 변형 간격 계산
+					stage.last = clock.getElapsedTime();
+					prism.remove(lines); // 다 쓴 선 정리
+					lGeo.dispose();
 				},
 			});
-			tl.to(build, { value: 1, duration: 1.6, ease: "power2.inOut" }, 0.2) // 테두리 그리기
-				.to(intro, { depth: 1, duration: 1.0, ease: "power3.out" }, 1.5) // 두께 생김
-				.to(intro, { s: 1, spin: 0, duration: 1.4, ease: "expo.out" }, 1.5) // 살짝 돌며 자리 잡음
+			introTl
+				.to(lineU.uP, { value: 1, duration: 2.1, ease: "power2.inOut" }, 0.1) // 선들이 빨려 들어와 압축
+				.to(intro, { spin: 0, s: 1, duration: 2.6, ease: "expo.out" }, 0.1)
+				.to(build, { value: 1, duration: 0.75, ease: "power2.inOut" }, 1.7) // 유리 몸체가 휘감듯 차오름
+				.to(intro, { depth: 1, duration: 0.8, ease: "power3.out" }, 1.95) // 두께 생김
+				.add(() => {
+					gsap.fromTo(flash, { value: 1 }, { value: 0, duration: 1.1, ease: "power2.out" }); // 번쩍
+					gsap.fromTo(intro, { pop: 1 }, { pop: 0, duration: 1.2, ease: "elastic.out(1, 0.4)" }); // 살짝 튕김
+				}, 2.4)
+				.to(lineU.uFade, { value: 1, duration: 0.7, ease: "power2.out" }, 2.3) // 선 사라짐
 				.add(() => {
 					if (!titleOut) gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
-				}, 2.0) // 타이틀
-				.to(hdr, { autoAlpha: 1, y: 0, duration: 0.8, ease: "power3.out", stagger: 0.06 }, 2.5); // 헤더
+				}, 2.6) // 타이틀
+				.to(hdr, { autoAlpha: 1, y: 0, duration: 0.8, ease: "power3.out", stagger: 0.06 }, 3.0); // 헤더
 		};
+		// 인트로 중 클릭하면 바로 완성
+		window.addEventListener("click", () => {
+			if (introTl && !intro.done && introTl.progress() < 0.6) introTl.progress(0.62);
+		});
 	} else {
 		titleFlat.forEach((o) => (o.v = 0));
 		drawTitle(W, H);
@@ -1174,7 +1294,17 @@
 		const u = st.u;
 		morph.value = u;
 		// 변형 중간(u = 0.5)에 가장 많이 조각남, 시작·끝에는 0
-		shatter.value = Math.sin(u * Math.PI) * CFG.shatter.amount;
+		shatter.value = intro.done ? Math.sin(u * Math.PI) * CFG.shatter.amount : intro.shatter;
+		// [TEST] 마우스를 빠르게 움직이면 에너지가 쌓여 도형이 살짝 흩어졌다 다시 모임 (인트로 중엔 크게)
+		const mdx = mouse.x - (intro.mx ?? mouse.x),
+			mdy = mouse.y - (intro.my ?? mouse.y);
+		intro.mx = mouse.x;
+		intro.my = mouse.y;
+		intro.energy = Math.min(1, intro.energy * 0.93 + Math.hypot(mdx, mdy) * (intro.done ? 0.6 : 2.0) * m);
+		explode.value = intro.explode + intro.energy * (intro.done ? 0.12 : 0.45);
+		uTimeU.value = t;
+		mouseL.value.x += (mouse.x * 1.2 - mouseL.value.x) * 0.06;
+		mouseL.value.y += (-mouse.y * 1.2 - mouseL.value.y) * 0.06;
 		clear.value = CLEAR[st.from] + (CLEAR[st.to] - CLEAR[st.from]) * u;
 
 		tilt.x += (mouse.y * 0.25 - tilt.x) * 0.05;
@@ -1203,7 +1333,7 @@
 		prism.quaternion.setFromEuler(eA);
 		qA.setFromAxisAngle(AZ, (kick.acc + kick.amt * u) * m); // 너트 면(정면) 축으로 회전
 		prism.quaternion.multiply(qA);
-		fluteMat.uniforms.uBloom.value = CFG.bloom * (1 + bump * 0.8); // 변형 중 빛 번짐 살짝 커짐
+		fluteMat.uniforms.uBloom.value = CFG.bloom * (1 + bump * 0.8 + flash.value * 2.0); // 변형 중·완성 순간 빛 번짐 커짐
 		// 드래그 회전 + 관성
 		if (!drag.on && (Math.abs(drag.vx) > 1e-5 || Math.abs(drag.vy) > 1e-5)) {
 			spinBy(drag.vx, drag.vy);
@@ -1242,7 +1372,7 @@
 		rip.value.z = Math.min(99, t - ripStart);
 
 		// 변형 중간에 살짝 커졌다 돌아오는 탄성 (+ 인트로 스케일)
-		prism.scale.setScalar((1 + bump * 0.1) * intro.s);
+		prism.scale.setScalar((1 + bump * 0.1 + intro.pop * 0.12) * intro.s);
 		prism.scale.z *= intro.depth; // [TEST] 만들어질 때 두께 0 → 1
 
 		renderer.setRenderTarget(rtBg);
