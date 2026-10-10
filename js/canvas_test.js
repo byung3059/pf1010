@@ -1457,7 +1457,7 @@
 				.intro2 .i2-meta { align-items: flex-end; opacity: 1; }
 				.intro2 .i2-meta > span:last-child { opacity: 0.56; }
 				/* 퍼센트 숫자: 메인 타이틀(DETAIL ORIENTED.)과 같은 크기·굵기 */
-				.intro2 .i2-count { font-size: ${fsT}px; line-height: 1; font-weight: ${CFG.textWeight}; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
+				.intro2 .i2-count { font-size: ${fsT}px; line-height: 1; font-weight: ${CFG.textWeight}; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; opacity: 0.32; } /* 연하게 */
 `;
 			document.head.appendChild(css);
 			document.body.appendChild(box);
