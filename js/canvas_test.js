@@ -80,6 +80,8 @@
 			scroll: true, // 스크롤하면 도형 회전·확대 + 타이틀 위로 사라짐 (#project_visual 높이 필요)
 			scrollChroma: 1.2, // 스크롤 속도만큼 무지개 번짐 증가
 			autoMorph: 2, // 자동 변형: 도형이 멈춰 있는 시간(초)마다 다음 도형으로 (0 = 끔, 클릭 변형은 그대로)
+			flute: 0.22, // 유리 칸막이(세로 골 유리) 굴절 세기 — 글자·도형 앞에 화면 전체로 깔림 (0 = 끔)
+			fluteWidth: 22, // 골 하나의 폭(px)
 		},
 		(window.GLASS_CONFIG || {}).fx || {},
 	);
@@ -755,6 +757,45 @@
 
 	const rtBg = new THREE.WebGLRenderTarget(1, 1);
 	const rtBack = new THREE.WebGLRenderTarget(1, 1);
+
+	// [TEST] 유리 칸막이: 최종 장면을 한 번 더 그려서 세로 골(원통 렌즈) 모양으로 굴절
+	const FLUTE = CFG.fx.flute > 0 && CFG.fx.fluteWidth > 0;
+	const rtFinal = new THREE.WebGLRenderTarget(1, 1);
+	const fluteMat = new THREE.ShaderMaterial({
+		uniforms: {
+			tScene: { value: rtFinal.texture },
+			uRes: res,
+			uW: { value: CFG.fx.fluteWidth * DPR },
+			uAmt: { value: CFG.fx.flute },
+		},
+		vertexShader: `void main(){ gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+		fragmentShader: `
+      uniform sampler2D tScene; uniform vec2 uRes; uniform float uW, uAmt;
+      void main(){
+        vec2 p = gl_FragCoord.xy;
+        float t = fract(p.x / uW);    // 골 안에서의 위치 0~1
+        float b = t - 0.5;            // 골 가운데 0, 양끝 ±0.5
+        // 골마다 원통 렌즈처럼 옆으로 밀어 냄 → 경계에서 이미지가 계단처럼 어긋남
+        float off = b * uW * uAmt;
+        vec2 uv = vec2(p.x + off, p.y) / uRes;
+        // 골 끝으로 갈수록 살짝 색 갈라짐
+        vec2 ca = vec2(b * uW * uAmt * 0.08, 0.0) / uRes;
+        vec2 px = vec2(1.0 / uRes.x, 0.0) * 1.5; // 골 안쪽 살짝 뿌옇게 (가로 3샘플)
+        vec3 c = vec3(0.0);
+        for (int i = -1; i <= 1; i++) {
+          vec2 q = uv + px * float(i);
+          c += vec3(texture2D(tScene, q + ca).r, texture2D(tScene, q).g, texture2D(tScene, q - ca).b);
+        }
+        c /= 3.0;
+        // 골 경계 아주 옅은 반사 (검은 배경에서는 거의 안 보임)
+        c += pow(t, 14.0) * 0.025 * uAmt;
+        gl_FragColor = vec4(c, 1.0);
+      }`,
+		depthTest: false,
+		depthWrite: false,
+	});
+	const fluteScene = new THREE.Scene();
+	fluteScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), fluteMat));
 	backMat.uniforms.uTex.value = rtBg.texture;
 	frontMat.uniforms.uTex.value = rtBack.texture;
 
@@ -773,6 +814,7 @@
 		renderer.setSize(W, H, false);
 		rtBg.setSize(W * DPR, H * DPR);
 		rtBack.setSize(W * DPR, H * DPR);
+		rtFinal.setSize(W * DPR, H * DPR);
 		res.value.set(W * DPR, H * DPR);
 		redrawTitle(W, H);
 		camera.aspect = W / H;
@@ -1103,12 +1145,17 @@
 		renderer.render(bgScene, orthoCam);
 		prism.material = backMat;
 		renderer.render(scene, camera);
-		renderer.setRenderTarget(null);
+		renderer.setRenderTarget(FLUTE ? rtFinal : null); // [TEST] 칸막이가 있으면 한 번 더 거쳐서 화면에
 		renderer.clear();
 		renderer.render(bgScene, orthoCam);
 		prism.material = frontMat;
 		renderer.render(scene, camera);
 		if (projChars.some((c) => Math.abs(c.v) < 1)) renderer.render(projScene, orthoCam); // [TEST] 보이는 글자가 있을 때만
+		if (FLUTE) {
+			renderer.setRenderTarget(null);
+			renderer.clear();
+			renderer.render(fluteScene, orthoCam);
+		}
 	}
 	tick();
 })();
