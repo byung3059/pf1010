@@ -16,7 +16,7 @@
 			linkScale: 3, // 링크·버튼 위에서 확대 배수
 			dragSize: 84, // 유리 도형 위 지름(px)
 			dragText: "DRAG OR CLICK", // 유리 도형 위 글자 (비우면 글자 없음)
-			skipText: "CLICK TO SKIP", // 인트로 중 글자 (클릭하면 인트로 건너뜀, 비우면 글자 없음)
+			skipText: "SKIP", // 인트로 중 글자 (클릭하면 인트로 건너뜀, 비우면 글자 없음)
 			hideNative: true, // 기본 마우스 커서 숨김
 		},
 		window.CURSOR_CONFIG || {},
@@ -95,7 +95,7 @@
 			opacity: 0; transition: opacity .2s; }
 		.g-cursor span { position: absolute; }
 		.g-cursor.is-drag .t-drag, .g-cursor.is-grabbing .t-drag, .g-cursor.is-skip .t-skip { opacity: 1; }
-		.g-cursor .t-skip { color: #fff; } /* difference 블렌드에서 흰 글자 → 배경 반전돼 어두운 인트로 위에서도 보임 */
+		.g-cursor .t-skip { color: #fff; font-weight: 100; } /* difference 블렌드에서 흰 글자 → 배경 반전돼 어두운 인트로 위에서도 보임 */
 		.g-cursor.is-skip { animation: g-cursor-pulse 1.6s ease-in-out infinite; }
 		@keyframes g-cursor-pulse { 50% { scale: 1.08; } }
 		.g-cursor.is-down { transform: scale(0.7); }

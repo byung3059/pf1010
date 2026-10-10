@@ -563,7 +563,7 @@
 	window.addEventListener("touchmove", (e) => drag.on && e.preventDefault(), { passive: false }); // 도형 돌릴 땐 스크롤 막기
 
 	/* ───────── 6. 인트로 ─────────
-	   1) 로딩: 0 → 100% (주행계처럼 자리마다 숫자가 이어서 굴러감) + 진행선 — 도형은 작게 돌며 4 → 6 → 8 → 4각으로 변형
+	   1) 로딩: 0 → 100% (4·8의 배수, 바뀐 자리만 숫자 띠가 부드럽게 굴러감) + 진행선 — 도형은 작게 돌며 4 → 6 → 8 → 4각으로 변형
 	   2) 공개: 로더가 빠지고 도형이 커지며, 칸막이가 가운데 열부터 한 열씩 끼워짐
 	   3) 타이틀 글자 → 헤더 → 이후 autoMorph초마다 자동 변형 (클릭하면 건너뜀) */
 	let EASE_L = "power4.out"; // 글자 이징 (cubic-bezier(.35, 0, 0, 1))
@@ -591,11 +591,12 @@
 
 		const font = `"${CFG.fontFamily}", "Unbounded", sans-serif`;
 		const numSize = Math.round((fontSize(window.innerWidth) * 2) / 3); // 숫자 = 타이틀의 2/3
+		const PCT = [0, 4, 8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 100];
 		const box = document.createElement("div");
 		box.className = "intro2";
 		box.innerHTML = `
 			<div class="i2-meta">
-				<span class="i2-count"><span class="i2-num">${`<span class="i2-d"><span>${[..."01234567890"].map((d) => `<b>${d}</b>`).join("")}</span></span>`.repeat(3)}</span><span class="i2-pct">%</span></span>
+				<span class="i2-count"><span class="i2-num">${`<span class="i2-d"><span>${[..."01234567890123456789"].map((d) => `<b>${d}</b>`).join("")}</span></span>`.repeat(3)}</span><span class="i2-pct">%</span></span>
 				<span class="i2-label">Loading</span>
 			</div>
 			<div class="i2-bar"><i></i></div>`;
@@ -634,16 +635,20 @@
 		fitBase();
 		document.fonts.ready.then(fitBase);
 
-		// 숫자 롤링(주행계): 자리마다 0~9(+0) 세로 띠를 값에 따라 연속으로 올림
-		// 일의 자리는 계속 굴러가고, 윗자리는 아랫자리가 9 → 0으로 넘어가는 동안만 같이 굴러감
-		const strips = [...box.querySelectorAll(".i2-d > span")];
-		const setNum = (v) => {
-			strips.forEach((strip, i) => {
-				const unit = 10 ** (strips.length - 1 - i);
-				const carry = Math.max(0, (v % unit) - (unit - 1)); // 아랫자리 마지막 1 동안 0 → 1
-				const pos = (Math.floor(v / unit) % 10) + (unit > 1 ? carry : v % 1);
-				strip.style.transform = `translateY(${(-pos / 11) * 100}%)`;
+		// 숫자 롤링: 자리마다 0~9 띠(두 번 반복)를 바뀐 자리만 앞으로 굴려 새 숫자에 멈춤
+		// 굴러가는 중에 다음 값이 오면 끊지 않고 지금 위치에서 이어서 굴러감
+		const strips = [...box.querySelectorAll(".i2-d > span")].map((el) => ({ el, pos: 0 }));
+		const drawStrip = (s) => (s.el.style.transform = `translateY(${(-s.pos / 20) * 100}%)`);
+		let numStr = "000";
+		const setNum = (str) => {
+			if (str === numStr) return;
+			strips.forEach((s, i) => {
+				if (str[i] === numStr[i]) return;
+				if (s.pos >= 10) (s.pos -= 10), drawStrip(s); // 두 번째 띠 → 같은 숫자의 첫 번째 띠로
+				const d = +str[i];
+				gsap.to(s, { pos: d < s.pos - 0.5 ? d + 10 : d, duration: 0.6, ease: "power2.out", delay: i * 0.04, overwrite: true, onUpdate: () => drawStrip(s) });
 			});
+			numStr = str;
 		};
 
 		const colsMax = Math.ceil(window.innerWidth / 2 / CFG.fluteWidth) + 2;
@@ -669,7 +674,7 @@
 					ease: "power1.inOut",
 					onUpdate() {
 						intro.lm = load.p * SHAPES.length;
-						setNum(load.p * 100);
+						setNum(String(PCT[Math.floor(load.p * (PCT.length - 1) + 1e-4)]).padStart(3, "0"));
 						bar.style.transform = `scaleX(${load.p})`;
 					},
 				}, 0.3)
