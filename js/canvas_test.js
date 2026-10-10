@@ -1061,13 +1061,11 @@
 	let introStart = null,
 		frame = 0;
 	if (FX.intro && FXON && window.gsap) {
-		// [TEST] 인트로 — 점 · 선 · 면이 웹 레이아웃을 짜듯 각지게 선을 맞춰 가다 유리 오브젝트가 됨 (모든 치수 8의 배수)
-		//   1) 점   : 화면 정가운데 점 하나 + 좌표 라벨 "0, 0"
-		//   2) 선   : 점에서 가로·세로 가이드선이 화면 끝까지 뻗고, 40px 간격 격자가 가운데부터 한 줄씩 그려짐 (간격 숫자 표시)
-		//   3) 면   : PC 1920 화면이 열리고 블록(헤더·비주얼·카드·하단)이 '착착' 펼쳐짐 → 태블릿 768 → 모바일 480으로 줄며 재배치
-		//             → 가운데로 모여 하나의 사각형 (점·면은 또렷하게, 선은 최대한 옅게)
-		//   4) 입체 : 사각형 가운데가 원형으로 뚫리고 → 유리 너트로 바뀌며 두께가 생김 (번쩍)
-		//   5) 정렬 : 가이드 격자가 지금의 격자 유리 칸막이로 바뀌며 사라짐 → 타이틀 → 헤더가 맨 위 가이드에 맞춰 자리 잡음
+		// [TEST] 인트로
+		//   1) 선   : 칸막이 골 경계와 같은 자리에 아주 옅은 선(rgba 255,255,255,0.1)이 가운데에서 양쪽으로 쫘악 그어짐
+		//   2) 사각 : 완전 흰색(#FFFFFF) 사각형 라인이 위 가운데에서 양쪽으로 그려짐 (너트 정면 크기 그대로)
+		//   3) 입체 : 그 라인에서 유리 너트가 툭 튀어나오며 두께가 솟고, 살짝 기울어 옆면이 보였다가 평소 자세로
+		//   4) 정렬 : 선이 그대로 격자 유리 칸막이로 바뀜 → 타이틀 → 헤더
 		intro.s = 1;
 		intro.spin = 0;
 		intro.depth = 0.02;
@@ -1089,24 +1087,8 @@
 		ov.style.cssText = "position:fixed;inset:0;width:100%;height:100%;z-index:50;pointer-events:none;";
 		document.body.appendChild(ov);
 		const oc = ov.getContext("2d");
-		const G = 40; // 가이드 격자 간격 (= 칸막이 골 폭)
-		const snap = (v) => Math.round(v / 8) * 8; // 8px 단위로 맞춤
-		const lerp = (a, b, t) => a + (b - a) * t;
-		// 점·선·면 투명도 — 점과 면은 또렷하게, 선은 최대한 투명하게
-		const A = { dot: 1, grid: 0.035, cross: 0.08, edge: 0.12, plane: 0.13 };
-		const S = { dot: 0, label: 0, cross: 0, grid: 0, gridA: 1, frame: 0, edge: 0, dev: 0, devLabel: 0, gather: 0, hole: 0, sqA: 1 };
-		// 기기별 레이아웃 (기기 실제 px, 모두 8의 배수): 화면 [w, h] + 블록 5개 [x0, y0, x1, y1] (헤더 / 비주얼 / 카드 / 카드 / 하단)
-		const DEVICES = [
-			{ name: "PC", size: [1920, 1080], blocks: [[0, 0, 1920, 96], [120, 144, 1800, 640], [120, 688, 944, 1000], [976, 688, 1800, 1000], [120, 1032, 1800, 1064]] },
-			{ name: "TABLET", size: [768, 1024], blocks: [[0, 0, 768, 80], [40, 112, 728, 512], [40, 544, 728, 752], [40, 784, 728, 992], [40, 1000, 728, 1016]] },
-			{ name: "MOBILE", size: [480, 960], blocks: [[0, 0, 480, 64], [24, 88, 456, 456], [24, 480, 456, 664], [24, 688, 456, 872], [24, 896, 456, 936]] },
-		];
-		const BL = DEVICES[0].blocks.map(() => ({ p: 0 })); // 블록 등장 진행도
-		// 각진 점: 8px(큰 점) / 4px(작은 점) 정사각형
-		const pt = (x, y, sz, a) => {
-			oc.fillStyle = `rgba(255,255,255,${a})`;
-			oc.fillRect(Math.round(x - sz / 2), Math.round(y - sz / 2), sz, sz);
-		};
+		const G = CFG.fx.fluteWidth || 40; // 칸막이 골 폭 = 선 간격 → 선이 그대로 유리 골 경계가 됨
+		const S = { lines: 0, linesA: 1, sq: 0, sqA: 1 };
 		function drawIntro() {
 			const w = window.innerWidth,
 				h = window.innerHeight,
@@ -1115,109 +1097,65 @@
 			if (ov.height !== Math.floor(h * d)) ov.height = Math.floor(h * d);
 			oc.setTransform(d, 0, 0, d, 0, 0);
 			oc.clearRect(0, 0, w, h);
-			const cx = snap(w / 2),
-				cy = snap(h / 2);
-			oc.lineWidth = 1;
-			oc.font = '500 10px "Pretendard", monospace';
-			// ── 선: 격자 (가운데부터 한 줄씩) + 십자 — 아주 옅게
-			const kx = Math.ceil(w / 2 / G),
-				ky = Math.ceil(h / 2 / G),
-				km = Math.max(kx, ky);
-			if (S.grid > 0 && S.gridA > 0) {
-				oc.strokeStyle = `rgba(255,255,255,${A.grid * S.gridA})`;
+			const cx = w / 2,
+				cy = h / 2;
+			// ── 선: 칸막이 골 경계와 같은 자리 (세로: 왼쪽에서 G 간격 / 가로: 아래에서 G 간격 — 셰이더의 gl_FragCoord 기준)
+			//    가운데 가까운 선부터 차례로, 각 선은 가운데에서 양 끝으로 '쫘악' 뻗음
+			if (S.lines > 0 && S.linesA > 0) {
+				oc.strokeStyle = `rgba(255,255,255,${0.1 * S.linesA})`;
+				oc.lineWidth = 1;
 				oc.beginPath();
-				for (let k = 1; k <= km; k++) {
-					const q = Math.min(1, Math.max(0, S.grid * km * 1.3 - k + 1));
-					if (q <= 0) break;
-					const e = 1 - Math.pow(1 - q, 4);
-					if (k <= kx) for (const sx of [-1, 1]) {
-						const x = cx + sx * k * G + 0.5;
-						oc.moveTo(x, cy - (h / 2) * e);
-						oc.lineTo(x, cy + (h / 2) * e);
-					}
-					if (k <= ky) for (const sy of [-1, 1]) {
-						const y = cy + sy * k * G + 0.5;
-						oc.moveTo(cx - (w / 2) * e, y);
-						oc.lineTo(cx + (w / 2) * e, y);
-					}
+				const far = Math.hypot(w, h) / 2;
+				const reach = S.lines * far * 1.25; // 가운데에서 이 거리까지 선이 생김
+				for (let x = G; x < w; x += G) {
+					const dx = Math.abs(x - cx);
+					const q = Math.min(1, Math.max(0, (reach - dx) / (far * 0.35)));
+					if (q <= 0) continue;
+					const e = 1 - Math.pow(1 - q, 3);
+					oc.moveTo(Math.round(x) + 0.5, cy - (h / 2) * e);
+					oc.lineTo(Math.round(x) + 0.5, cy + (h / 2) * e);
+				}
+				for (let yb = G; yb < h; yb += G) {
+					const y = h - yb;
+					const dy = Math.abs(y - cy);
+					const q = Math.min(1, Math.max(0, (reach - dy) / (far * 0.35)));
+					if (q <= 0) continue;
+					const e = 1 - Math.pow(1 - q, 3);
+					oc.moveTo(cx - (w / 2) * e, Math.round(y) + 0.5);
+					oc.lineTo(cx + (w / 2) * e, Math.round(y) + 0.5);
 				}
 				oc.stroke();
 			}
-			if (S.cross > 0 && S.gridA > 0) {
-				oc.strokeStyle = `rgba(255,255,255,${A.cross * S.gridA})`;
-				oc.beginPath();
-				oc.moveTo(cx - (w / 2) * S.cross, cy + 0.5);
-				oc.lineTo(cx + (w / 2) * S.cross, cy + 0.5);
-				oc.moveTo(cx + 0.5, cy - (h / 2) * S.cross);
-				oc.lineTo(cx + 0.5, cy + (h / 2) * S.cross);
-				oc.stroke();
-			}
-			// ── 점: 가운데 점 + 좌표
-			if (S.dot > 0 && S.frame < 1) {
-				pt(cx, cy, 8 * S.dot, A.dot * (1 - S.frame));
-				oc.fillStyle = `rgba(255,255,255,${0.5 * S.label * (1 - S.frame)})`;
-				oc.fillText("0, 0", cx + 8, cy - 8);
-			}
-			if (S.frame <= 0 || S.sqA <= 0) return;
-			// ── 기기 화면: PC 1920 → 태블릿 768 → 모바일 480 (같은 배율이라 실제 크기 차이가 그대로 보임)
-			const k = Math.min((w * 0.84) / 1920, (h * 0.7) / 1080);
-			const i0 = Math.min(1, Math.floor(S.dev)),
-				f = Math.min(1, S.dev - i0);
-			const D0 = DEVICES[i0],
-				D1 = DEVICES[Math.min(2, i0 + 1)];
-			const fw = lerp(D0.size[0], D1.size[0], f) * k * S.frame,
-				fh = lerp(D0.size[1], D1.size[1], f) * k * S.frame;
-			const fx = snap(cx - fw / 2),
-				fy = snap(cy - fh / 2);
-			// 모이기 (기기 화면·블록 → 너트 정면 크기의 사각형)
-			const ppw = h / 2 / (Math.tan((camera.fov * Math.PI) / 360) * camera.position.z); // 월드 1 = px
-			const sq = snap(2.1 * Math.cos(Math.PI / 4) * ppw);
-			const g = S.gather < 0.5 ? 4 * S.gather ** 3 : 1 - Math.pow(-2 * S.gather + 2, 3) / 2;
-			const toSq = (x0, y0, x1, y1) => [snap(lerp(x0, cx - sq, g)), snap(lerp(y0, cy - sq, g)), snap(lerp(x1, cx + sq, g)), snap(lerp(y1, cy + sq, g))];
-			const [ax0, ay0, ax1, ay1] = toSq(fx, fy, fx + snap(fw), fy + snap(fh));
-			// 선: 기기 테두리 (옅게, 위 → 오른쪽 → 아래 → 왼쪽 순으로 그려짐)
-			if (S.edge > 0) {
-				oc.strokeStyle = `rgba(255,255,255,${A.edge * S.sqA})`;
-				const per = 2 * (ax1 - ax0 + ay1 - ay0);
-				oc.setLineDash([per * S.edge, per]);
-				oc.strokeRect(ax0 + 0.5, ay0 + 0.5, ax1 - ax0 - 1, ay1 - ay0 - 1);
-				oc.setLineDash([]);
-			}
-			// 면: 블록 (기기 사이에서 위치·크기가 바뀌며 재배치)
-			BL.forEach((o, n) => {
-				if (o.p <= 0) return;
-				const b0 = D0.blocks[n],
-					b1 = D1.blocks[n];
-				const bx0 = fx + lerp(b0[0], b1[0], f) * k * S.frame,
-					by0 = fy + lerp(b0[1], b1[1], f) * k * S.frame,
-					bx1 = fx + lerp(b0[2], b1[2], f) * k * S.frame,
-					by1 = fy + lerp(b0[3], b1[3], f) * k * S.frame;
-				const e = 1 - Math.pow(1 - o.p, 4); // 블록 왼쪽 위 모서리에서 제 크기로 펼쳐짐
-				const [x0, y0, x1, y1] = toSq(snap(bx0), snap(by0), snap(lerp(bx0 + 8, bx1, e)), snap(lerp(by0 + 8, by1, e)));
-				oc.fillStyle = `rgba(255,255,255,${(A.plane + 0.1 * g) * S.sqA})`;
-				oc.fillRect(x0, y0, x1 - x0, y1 - y0);
-				// 점: 블록 네 모서리 (작은 점)
-				if (g < 1) for (const [px, py] of [[x0, y0], [x1, y0], [x0, y1], [x1, y1]]) pt(px, py, 4, 0.9 * S.sqA * (1 - g));
-			});
-			// 점: 기기 화면 네 모서리 (큰 점)
-			for (const [px, py] of [[ax0, ay0], [ax1, ay0], [ax0, ay1], [ax1, ay1]]) pt(px, py, 8, A.dot * S.sqA);
-			// 기기 라벨: "1920 PC" → "768 TABLET" → "480 MOBILE"
-			if (S.devLabel > 0 && g < 1) {
-				const di = Math.min(2, Math.round(S.dev));
-				const D = DEVICES[di];
-				oc.fillStyle = `rgba(255,255,255,${0.7 * S.devLabel * (1 - g) * S.sqA})`;
-				oc.fillText(`${D.size[0]}  ${D.name}`, ax0, ay0 - 12);
-				oc.fillStyle = `rgba(255,255,255,${0.35 * S.devLabel * (1 - g) * S.sqA})`;
-				oc.fillText(`${D.size[0]} × ${D.size[1]}`, ax1 - 72, ay0 - 12);
-			}
-			// 입체 전: 가운데 원형 구멍이 뚫림
-			if (S.hole > 0) {
-				oc.save();
-				oc.globalCompositeOperation = "destination-out";
-				oc.beginPath();
-				oc.arc(cx, cy, 1.18 * ppw * S.hole, 0, Math.PI * 2);
-				oc.fill();
-				oc.restore();
+			// ── 사각형 라인: 완전 흰색(#FFFFFF), 너트를 정면에서 본 크기 그대로 — 12시 가운데에서 시작해 양쪽으로 그려져 아래에서 만남
+			if (S.sq > 0 && S.sqA > 0) {
+				const ppw = h / 2 / (Math.tan((camera.fov * Math.PI) / 360) * camera.position.z); // 월드 1 = px
+				const hs = 2.1 * Math.cos(Math.PI / 4) * ppw;
+				const per = hs * 8; // 사각형 둘레
+				const len = (per / 2) * S.sq; // 한쪽으로 그려진 길이
+				oc.strokeStyle = `rgba(255,255,255,${S.sqA})`;
+				oc.lineWidth = 2;
+				oc.lineJoin = "miter";
+				for (const dir of [1, -1]) {
+					// 위 가운데 → (dir 1: 오른쪽 / -1: 왼쪽) 모서리 → 옆면 → 아래 모서리 → 아래 가운데
+					const pts = [
+						[cx, cy - hs],
+						[cx + dir * hs, cy - hs],
+						[cx + dir * hs, cy + hs],
+						[cx, cy + hs],
+					];
+					let left = len;
+					oc.beginPath();
+					oc.moveTo(pts[0][0], pts[0][1]);
+					for (let n = 1; n < pts.length && left > 0; n++) {
+						const [x0, y0] = pts[n - 1],
+							[x1, y1] = pts[n];
+						const sl = Math.hypot(x1 - x0, y1 - y0);
+						const t = Math.min(1, left / sl);
+						oc.lineTo(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t);
+						left -= sl;
+					}
+					oc.stroke();
+				}
 			}
 		}
 
@@ -1225,8 +1163,6 @@
 		// 첫 프레임(셰이더 컴파일로 멈칫함)이 지난 뒤 시작 → 느린 기기에서도 앞부분이 잘리지 않음
 		introStart = () => {
 			gsap.ticker.add(drawIntro);
-			const SNAP = "power4.out"; // 끝에서 딱 멈추는 각진 이징
-			const SNAP2 = "expo.inOut";
 			introTl = gsap.timeline({
 				onComplete: () => {
 					intro.done = true;
@@ -1236,39 +1172,28 @@
 				},
 			});
 			introTl
-				// 1) 점
-				.to(S, { dot: 1, duration: 0.3, ease: "back.out(3)" }, 0.1)
-				.to(S, { label: 1, duration: 0.2, ease: "none" }, 0.25)
-				// 2) 선 (아주 옅게): 십자 → 격자
-				.to(S, { cross: 1, duration: 0.5, ease: SNAP2 }, 0.35)
-				.to(S, { grid: 1, duration: 0.8, ease: "power2.out" }, 0.55)
-				// 3) 면 — PC 1920: 점에서 화면이 열리고 → 테두리 → 블록이 하나씩
-				.to(S, { frame: 1, duration: 0.5, ease: SNAP }, 0.75)
-				.to(S, { edge: 1, duration: 0.45, ease: "power2.inOut" }, 0.85)
-				.to(S, { devLabel: 1, duration: 0.2, ease: "none" }, 0.95)
-				.to(BL, { p: 1, duration: 0.4, ease: SNAP, stagger: 0.07 }, 1.05)
-				// 태블릿 768 → 모바일 480: 화면이 줄며 블록이 다시 배치됨
-				.to(S, { dev: 1, duration: 0.55, ease: SNAP2 }, 1.85)
-				.to(S, { dev: 2, duration: 0.55, ease: SNAP2 }, 2.6)
-				// 모바일에서 가운데 사각형으로 모임
-				.to(S, { gather: 1, duration: 0.5, ease: "none" }, 3.35)
-				// 4) 입체: 구멍 → 유리로 바뀌며 두께
-				.to(S, { hole: 1, duration: 0.3, ease: SNAP }, 3.8)
+				// 1) 선: 가운데에서 양쪽으로 쫘악 (rgba 255,255,255,0.1)
+				.to(S, { lines: 1, duration: 1.1, ease: "power2.inOut" }, 0.15)
+				// 2) 사각형 라인 (#FFFFFF)
+				.to(S, { sq: 1, duration: 0.7, ease: "power3.inOut" }, 1.0)
+				// 3) 라인에서 입체가 튀어나옴: 유리가 나타나며 두께가 앞으로 솟고, 살짝 기울어 옆면이 보임
 				.add(() => {
-					build.value = 1; // 유리 몸체 나타남
-					gsap.fromTo(flash, { value: 1 }, { value: 0, duration: 1.0, ease: "power2.out" }); // 번쩍
-				}, 4.05)
-				.to(S, { sqA: 0, duration: 0.35, ease: "power2.out" }, 4.05)
-				.to(intro, { depth: 1, duration: 0.6, ease: "expo.out" }, 4.1)
-				.to(intro, { face: 0, duration: 1.3, ease: "expo.out" }, 4.2)
-				// 5) 정렬: 가이드 격자 → 격자 유리 칸막이
-				.to(S, { gridA: 0, duration: 0.6, ease: "power2.out" }, 4.25)
-				.to(fluteMat.uniforms.uShift, { value: fluteTarget.s, duration: 0.8, ease: "power2.out" }, 4.25)
-				.to(fluteMat.uniforms.uShiftT, { value: fluteTarget.t, duration: 0.8, ease: "power2.out" }, 4.25)
+					build.value = 1;
+					gsap.fromTo(flash, { value: 1 }, { value: 0, duration: 0.9, ease: "power2.out" });
+				}, 1.75)
+				.to(intro, { depth: 1, duration: 0.9, ease: "back.out(2.2)" }, 1.75)
+				.fromTo(intro, { pop: 0 }, { pop: 1, duration: 0.25, ease: "power2.out", yoyo: true, repeat: 1 }, 1.75) // 순간 툭 커졌다 돌아옴
+				.to(intro, { rx: 0.45, ry: -0.6, duration: 0.8, ease: "power3.out" }, 1.8)
+				.to(S, { sqA: 0, duration: 0.5, ease: "power2.out" }, 1.95) // 사각형 라인은 유리 테두리로 녹아듦
+				.to(intro, { face: 0, duration: 1.4, ease: "expo.out" }, 2.5) // 평소 자세로
+				// 4) 선 → 그대로 격자 유리 칸막이로
+				.to(S, { linesA: 0, duration: 0.8, ease: "power2.inOut" }, 2.4)
+				.to(fluteMat.uniforms.uShift, { value: fluteTarget.s, duration: 0.9, ease: "power2.inOut" }, 2.4)
+				.to(fluteMat.uniforms.uShiftT, { value: fluteTarget.t, duration: 0.9, ease: "power2.inOut" }, 2.4)
 				.add(() => {
 					if (!titleOut) gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
-				}, 4.4)
-				.to(hdr, { autoAlpha: 1, y: 0, duration: 0.5, ease: SNAP, stagger: 0.05 }, 4.7); // 헤더
+				}, 2.7) // 타이틀
+				.to(hdr, { autoAlpha: 1, y: 0, duration: 0.6, ease: "power4.out", stagger: 0.05 }, 3.0); // 헤더
 		};
 		// 인트로 중 클릭하면 바로 완성
 		window.addEventListener("click", () => {
