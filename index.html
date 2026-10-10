@@ -92,7 +92,8 @@
 				#project_site .pro_card:focus-visible .pro_tag li { background: rgba(255, 255, 255, 0.16); color: #fff; }
 			}
 			/* 프로젝트명: 카드 아래 오른쪽 */
-			#project_site .pro_name { z-index: 2; position: relative; margin-top: 16px; font-family: "Pretendard", sans-serif; font-size: 24px; line-height: 32px; font-weight: 700; color: #fff; text-align: right; }
+			#project_site .pro_name { z-index: 2; position: relative; overflow: hidden; margin-top: 16px; font-family: "Pretendard", sans-serif; font-size: 24px; line-height: 32px; font-weight: 700; color: #fff; text-align: right; }
+			#project_site .pro_name_in { display: block; will-change: transform; } /* 아래에서 올라오는 글자 (js) */
 			@media (max-width: 768px) {
 				#project_site .pro_list { gap: 48px; }
 				#project_site .pro_name { margin-top: 8px; font-size: 16px; line-height: 24px; }
@@ -123,7 +124,7 @@
 			// 유리 캔버스 설정 — 빠진 값은 js/canvas_test.js 맨 위 기본값 사용 (지금 화면 = 기본값)
 			window.GLASS_CONFIG = {
 				fontFamily: "Paperlogy", // 타이틀·로딩 숫자 폰트
-				// morph: 1.2, autoMorph: 3, introSpeed: 0.7, refraction: 1.4 … 바꿀 값만 적으면 됨
+				// morph: 1.2, autoMorph: 3, introSpeed: 0.7, loadTime: 5.6, refraction: 1.4 … 바꿀 값만 적으면 됨
 			};
 		</script>
 		<script src="./js/canvas_test.js" defer></script>

@@ -3,7 +3,7 @@
  * 스크롤 양에 따라(scrub, 위로 올리면 되감김) — 천천히, 부드럽게 따라옴:
  *   1) 카드가 투명한 상태에서 아래에서 올라오며 살짝 기울어진 상태 → 똑바로, 가장자리가 잘린 상태(clip-path) → 전체가 펼쳐짐
  *   2) 카드 안 이미지는 스크롤에 따라 위아래로 천천히 움직임 (패럴랙스)
- *   3) 태그 칩·프로젝트명이 카드보다 조금 늦게 따라 들어옴
+ *   3) 태그 칩·프로젝트명이 카드보다 조금 늦게, 아래에서 위로 올라옴 (프로젝트명은 줄 아래에 가려져 있다가 올라옴)
  * 호버(1024px 이상 + 마우스 기기만): 바로가기 아이콘이 마우스를 살짝 따라감
  *   (이미지 확대·소개 오버레이는 CSS — index.html의 @media (min-width: 1024px) and (hover: hover))
  * 모션 줄이기 설정이면 애니메이션 없이 그대로 보여 줌
@@ -18,8 +18,8 @@
 			rise: 120, // 카드가 올라오는 거리(px)
 			tilt: 2, // 올라올 때 기울기(도) — 왼쪽 카드는 -, 오른쪽 카드는 +
 			start: "top bottom", // 등장 시작: 카드 윗변이 화면 맨 아래
-			end: "top 30%", // 등장 끝: 카드 윗변이 화면 30% 지점 (값이 작을수록 더 길게 스크롤해야 끝남 = 천천히)
-			smooth: 1.2, // 스크롤을 따라오는 지연(초) — 클수록 느리고 부드럽게
+			end: "top 55%", // 등장 끝: 카드 윗변이 화면 55% 지점 → 중간쯤 오기 전에 다 보임 (값이 작을수록 더 올려야 끝남)
+			smooth: 0.8, // 스크롤을 따라오는 지연(초) — 클수록 느리고 부드럽게
 			parallax: 8, // 이미지가 위아래로 움직이는 범위(%)
 			hoverIcon: 8, // 호버 시 아이콘이 마우스를 따라가는 거리(px)
 		},
@@ -33,6 +33,12 @@
 		var img = box.querySelector(".pro_img");
 		var tags = box.querySelectorAll(".pro_tag li");
 		var name = box.querySelector(".pro_name");
+		// 프로젝트명: 안쪽 span을 줄 아래에 숨겨 두고 올림 (pro_name이 마스크)
+		var nameIn = null;
+		if (name) {
+			name.innerHTML = '<span class="pro_name_in">' + name.innerHTML + "</span>";
+			nameIn = name.firstChild;
+		}
 		var isLeft = box.getBoundingClientRect().left + box.offsetWidth / 2 < window.innerWidth / 2;
 
 		// 1) + 3) 등장
@@ -43,8 +49,8 @@
 		tl.fromTo(box, { y: cfg.rise, rotation: isLeft ? -cfg.tilt : cfg.tilt }, { y: 0, rotation: 0, ease: "power1.out" }, 0)
 			.fromTo(box, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.6 }, 0) // 투명 → 보임 (등장 구간 앞 60% 동안)
 			.fromTo(a, { clipPath: "inset(12% 8% 12% 8% round 8px)" }, { clipPath: "inset(0% 0% 0% 0% round 8px)", ease: "power1.out" }, 0)
-			.fromTo(tags, { y: 16, autoAlpha: 0 }, { y: 0, autoAlpha: 1, stagger: 0.08 }, 0.4)
-			.fromTo(name, { x: 24, autoAlpha: 0 }, { x: 0, autoAlpha: 1 }, 0.5);
+			.fromTo(tags, { y: 24, autoAlpha: 0 }, { y: 0, autoAlpha: 1, stagger: 0.08, ease: "power2.out" }, 0.4)
+			.fromTo(nameIn, { yPercent: 110 }, { yPercent: 0, ease: "power2.out" }, 0.45);
 
 		// 2) 이미지 패럴랙스: 카드가 화면을 지나가는 동안 계속
 		if (img) {

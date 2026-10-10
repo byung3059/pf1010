@@ -52,6 +52,7 @@
 			dragSpeed: 0.008, // 드래그 회전 감도
 			dragInertia: 0.95, // 놓은 뒤 관성 0~1
 			introSpeed: 0.7, // 인트로 속도 (1 = 기본, 낮을수록 느림)
+			loadTime: 5.6, // 로딩 숫자 0 → 100% 걸리는 시간(초, introSpeed 1 기준 — 실제로는 ÷ introSpeed)
 			mobileDpr: 1.5, // 모바일 최대 해상도 배율 (PC는 2)
 			mobileSamples: 8, // 모바일 유리 셰이더 샘플 수 (PC는 16)
 		},
@@ -671,13 +672,14 @@
 			css.remove();
 		};
 		introStart = () => {
+			const R = 0.2 + CFG.loadTime; // 공개 시작 시점 (로딩 끝나기 0.1초 전)
 			tl = gsap.timeline({ onComplete: finish }).timeScale(CFG.introSpeed);
 			tl.from(loader, { y: 16, autoAlpha: 0, duration: 0.5, ease: "power3.out", stagger: 0.06 }, 0.1)
 				// 1) 로딩
 				.to(load, {
 					p: 1,
-					duration: 3.2,
-					ease: "power1.inOut",
+					duration: CFG.loadTime,
+					ease: "sine.inOut",
 					onUpdate() {
 						intro.lm = load.p * SHAPES.length;
 						setNum(String(PCT[Math.floor(load.p * (PCT.length - 1) + 1e-4)]).padStart(3, "0"));
@@ -685,15 +687,15 @@
 					},
 				}, 0.3)
 				// 2) 공개
-				.addLabel("reveal", 3.4)
-				.to(loader, { y: -16, autoAlpha: 0, duration: 0.7, ease: "power2.inOut", stagger: 0.06 }, 3.4)
-				.to(intro, { s: 1, duration: 2.0, ease: "power3.inOut" }, 3.4)
-				.add(() => gsap.fromTo(flash, { value: 0.35 }, { value: 0, duration: 1.6, ease: "power2.out" }), 3.6)
-				.to(fluteMat.uniforms.uSweep, { value: colsMax, duration: 1.6, ease: "power2.inOut" }, 3.6)
-				.to(intro, { face: 0, duration: 2.6, ease: "power3.inOut" }, 3.8)
+				.addLabel("reveal", R)
+				.to(loader, { y: -16, autoAlpha: 0, duration: 0.7, ease: "power2.inOut", stagger: 0.06 }, R)
+				.to(intro, { s: 1, duration: 2.0, ease: "power3.inOut" }, R)
+				.add(() => gsap.fromTo(flash, { value: 0.35 }, { value: 0, duration: 1.6, ease: "power2.out" }), R + 0.2)
+				.to(fluteMat.uniforms.uSweep, { value: colsMax, duration: 1.6, ease: "power2.inOut" }, R + 0.2)
+				.to(intro, { face: 0, duration: 2.6, ease: "power3.inOut" }, R + 0.4)
 				// 3) 타이틀 → 헤더
-				.add(() => !titleOut && showChars(titleFlat, 0), 4.6)
-				.to(hdr, { autoAlpha: 1, y: 0, duration: 0.8, ease: "power3.out", stagger: 0.06 }, 5.0);
+				.add(() => !titleOut && showChars(titleFlat, 0), R + 1.2)
+				.to(hdr, { autoAlpha: 1, y: 0, duration: 0.8, ease: "power3.out", stagger: 0.06 }, R + 1.6);
 		};
 		// 스킵: 로딩만 100%로 넘기고 공개 애니메이션은 그대로 재생 (공개가 시작된 뒤엔 클릭 무시)
 		window.addEventListener("click", () => {
