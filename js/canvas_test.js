@@ -1108,7 +1108,8 @@
 		fluteMat.uniforms.uShift.value = fluteMat.uniforms.uShiftT.value = 0;
 
 		// 인트로 선택: GLASS_CONFIG.fx.introType (1 | 2), 주소 끝에 #intro1 / #intro2를 붙이면 그걸로
-		const INTRO = location.hash === "#intro1" ? 1 : location.hash === "#intro2" ? 2 : CFG.fx.introType === 1 ? 1 : 2;
+		const HASH = { "#intro1": 1, "#intro2": 2, "#intro3": 3 }[location.hash];
+		const INTRO = HASH || ([1, 2, 3].includes(CFG.fx.introType) ? CFG.fx.introType : 2);
 		if (INTRO === 1) {
 		// ───────── 인트로 1: 선 → 칸 단위 등장 → 멈춤 → 칸막이 효과 ─────────
 			// 선은 화면 맨 위 2D 캔버스에 그림 (헤더보다 아래)
@@ -1194,6 +1195,131 @@
 					.to(hdr, { autoAlpha: 1, y: 0, duration: 0.6, ease: "power4.out", stagger: 0.05 }, 5.3); // 헤더
 			};
 			// 인트로 중 클릭하면 끝으로 건너뜀
+			window.addEventListener("click", () => {
+				if (introTl && !intro.done) introTl.progress(1);
+			});
+		} else if (INTRO === 3) {
+			// ───────── 인트로 3: 모션 영상(티저 필름)처럼 — 빠른 컷 편집 + 키네틱 타이포 + 카메라 무빙 ─────────
+			//   0.0  레터박스(영화 비율 검은 띠) + 화면을 꽉 채우는 'DETAIL' → 'ORIENTED.' 하드 컷 (가로로 번지며 들어옴)
+			//   0.9  유리 너트 초근접 컷 3개 (구도가 툭툭 바뀌며 빠르게 흐름, 칸막이 굴절 과장)
+			//   1.9  각의 수 몽타주: 04 08 16 24 40 ○ 숫자가 컷마다 크게 바뀌고 도형도 같이 변형
+			//   2.8  흰 프레임 플래시 → 카메라가 뒤로 빠지며(줌아웃) 너트가 빠르게 돌다 제자리, 레터박스 열림
+			//   3.6  칸막이가 가운데 열부터 끼워짐 → 타이틀 → 헤더
+			reveal.value = 999;
+			intro.face = 1;
+			intro.rx = 0.4;
+			intro.ry = -0.55;
+			intro.spinOn = true;
+			intro.s = 3.2;
+			intro.lm = -1;
+			fluteMat.uniforms.uShift.value = fluteTarget.s * 2.5; // 초근접 컷에서는 굴절을 과장
+			fluteMat.uniforms.uShiftT.value = 0;
+			const font = `"${CFG.fontFamily}", "Unbounded", sans-serif`;
+			const box = document.createElement("div");
+			box.className = "intro3";
+			box.innerHTML = `
+				<div class="i3-black"></div>
+				<div class="i3-word"></div>
+				<div class="i3-num"></div>
+				<div class="i3-tc">00:00:00</div>
+				<div class="i3-bar i3-top"></div>
+				<div class="i3-bar i3-bot"></div>
+				<div class="i3-flash"></div>`;
+			const css = document.createElement("style");
+			css.textContent = `
+				.intro3 { position: fixed; inset: 0; z-index: 60; pointer-events: none; color: #fff; font-family: ${font}; overflow: hidden; }
+				.intro3 .i3-black { position: absolute; inset: 0; background: #000; }
+				.intro3 .i3-bar { position: absolute; left: 0; width: 100%; height: 12vh; background: #000; }
+				.intro3 .i3-top { top: 0; }
+				.intro3 .i3-bot { bottom: 0; }
+				.intro3 .i3-word { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 22vw; line-height: 0.8; font-weight: 900; letter-spacing: -0.04em; white-space: nowrap; }
+				.intro3 .i3-num { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 40vh; line-height: 0.8; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -0.04em; mix-blend-mode: difference; }
+				.intro3 .i3-tc { position: absolute; right: 40px; bottom: calc(12vh + 16px); font-size: 12px; line-height: 16px; letter-spacing: 0.08em; font-variant-numeric: tabular-nums; opacity: 0.56; }
+				.intro3 .i3-flash { position: absolute; inset: 0; background: #fff; opacity: 0; }`;
+			document.head.appendChild(css);
+			document.body.appendChild(box);
+			const $ = (q) => box.querySelector(q);
+			const word = $(".i3-word"),
+				numEl = $(".i3-num"),
+				tc = $(".i3-tc");
+			const colsMax = Math.ceil(window.innerWidth / 2 / (CFG.fx.fluteWidth || 40)) + 2;
+			let introTl = null;
+			const finish = () => {
+				intro.done = true;
+				intro.lm = -1;
+				intro.px = intro.py = 0;
+				stage.from = 0;
+				stage.to = 1;
+				stage.start = -1;
+				stage.last = clock.getElapsedTime();
+				curFrom = -1;
+				fluteMat.uniforms.uSweep.value = 999;
+				fluteMat.uniforms.uShift.value = fluteTarget.s;
+				fluteMat.uniforms.uShiftT.value = fluteTarget.t;
+				gsap.ticker.remove(tick3);
+				box.remove();
+				css.remove();
+			};
+			// 타임코드 (영상 느낌)
+			const t0 = performance.now();
+			const tick3 = () => {
+				const ms = performance.now() - t0;
+				const f = Math.floor((ms / 1000) * 24) % 24;
+				tc.textContent = `00:00:${String(Math.floor(ms / 1000)).padStart(2, "0")}:${String(f).padStart(2, "0")}`;
+			};
+			// 키네틱 단어 컷: 옆에서 번지며 미끄러져 들어와 딱 멈춤
+			const wordCut = (tl, text, at, from) =>
+				tl
+					.set(word, { textContent: text, autoAlpha: 1 }, at)
+					.fromTo(word, { xPercent: -50 + from, filter: "blur(24px)", scaleX: 1.4 }, { xPercent: -50, filter: "blur(0px)", scaleX: 1, duration: 0.32, ease: "expo.out" }, at);
+			// 초근접 컷: 구도를 '툭' 바꾸고 컷 안에서 천천히 흐름
+			const camCut = (tl, at, c) =>
+				tl
+					.set(intro, { s: c.s, px: c.x, py: c.y, rx: c.rx, ry: c.ry }, at)
+					.to(intro, { px: c.x + c.dx, ry: c.ry + 0.35, duration: 0.33, ease: "none" }, at);
+			introStart = () => {
+				gsap.ticker.add(tick3);
+				const tl = (introTl = gsap.timeline({ onComplete: finish }));
+				// 0) 레터박스 + 키네틱 타이포 (검은 배경 위)
+				wordCut(tl, "DETAIL", 0.1, 30);
+				wordCut(tl, "ORIENTED.", 0.45, -30);
+				tl.set(word, { autoAlpha: 0 }, 0.85);
+				// 1) 유리 초근접 컷 3개 (검은 막을 걷어 장면을 보여 줌)
+				tl.set($(".i3-black"), { autoAlpha: 0 }, 0.9);
+				camCut(tl, 0.9, { s: 3.4, x: 1.6, y: 0.4, rx: 0.2, ry: -1.1, dx: -0.6 });
+				camCut(tl, 1.23, { s: 2.6, x: -1.2, y: -0.6, rx: 0.9, ry: 0.2, dx: 0.5 });
+				camCut(tl, 1.56, { s: 4.2, x: 0.2, y: 1.4, rx: -0.3, ry: -0.4, dx: -0.4 });
+				// 2) 각의 수 몽타주: 숫자가 컷마다 바뀌며 도형도 같이 변형 (가운데 구도)
+				tl.set(intro, { s: 1.4, px: 0, py: 0, rx: 0.4, ry: -0.55 }, 1.9);
+				const SEQ = [["04", 0], ["08", 2], ["16", 4], ["24", 5], ["40", 7], ["○", 8]];
+				SEQ.forEach(([label, lm], k) => {
+					const at = 1.9 + k * 0.15;
+					tl.set(numEl, { textContent: label, autoAlpha: 1, scale: 1.15 }, at)
+						.to(numEl, { scale: 1, duration: 0.15, ease: "power2.out" }, at)
+						.to(intro, { lm, duration: 0.15, ease: "power2.out" }, at);
+				});
+				tl.set(intro, { lm: 0 }, 1.9) // 4각에서 시작
+					.set(numEl, { autoAlpha: 0 }, 2.8)
+					.to(intro, { lm: 9, duration: 0.25, ease: "power2.in" }, 2.65) // 원 → 다시 4각
+					// 3) 흰 플래시 → 줌아웃 + 빠른 회전 → 제자리, 레터박스 열림
+					.to($(".i3-flash"), { opacity: 1, duration: 0.06, ease: "none" }, 2.8)
+					.to($(".i3-flash"), { opacity: 0, duration: 0.5, ease: "power2.out" }, 2.86)
+					.set(intro, { s: 0.2, spin: -5 }, 2.82)
+					.to(intro, { s: 1, spin: 0, duration: 1.4, ease: "expo.out" }, 2.86)
+					.to(intro, { face: 0, duration: 2.0, ease: "expo.out" }, 3.0)
+					.to(fluteMat.uniforms.uShift, { value: fluteTarget.s, duration: 0.6, ease: "power2.out" }, 2.86)
+					.to([$(".i3-top")], { yPercent: -100, duration: 0.9, ease: "expo.inOut" }, 3.1)
+					.to([$(".i3-bot")], { yPercent: 100, duration: 0.9, ease: "expo.inOut" }, 3.1)
+					.to(tc, { autoAlpha: 0, duration: 0.3 }, 3.1)
+					// 4) 칸막이 스윕 → 타이틀 → 헤더
+					.set(fluteMat.uniforms.uSweep, { value: 0 }, 2.86)
+					.to(fluteMat.uniforms.uSweep, { value: colsMax, duration: 1.2, ease: "power2.inOut" }, 3.3)
+					.to(fluteMat.uniforms.uShiftT, { value: fluteTarget.t, duration: 1.0, ease: "power2.out" }, 3.4)
+					.add(() => {
+						if (!titleOut) gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
+					}, 3.6)
+					.to(hdr, { autoAlpha: 1, y: 0, duration: 0.6, ease: "power4.out", stagger: 0.05 }, 3.9);
+			};
 			window.addEventListener("click", () => {
 				if (introTl && !intro.done) introTl.progress(1);
 			});
@@ -1469,7 +1595,7 @@
 		// 마우스 방향으로 따라 움직임 + 스크롤하면 카메라 쪽으로 다가옴
 		par.x += (mouse.x * FX.parallax * m - par.x) * 0.06;
 		par.y += (-mouse.y * FX.parallax * 0.6 * m - par.y) * 0.06;
-		prism.position.set(0, 0, sp * 1.2); // [TEST] 화면 정가운데 고정 (마우스 따라 움직이지 않음, 스크롤하면 앞으로만 다가옴)
+		prism.position.set(intro.px || 0, intro.py || 0, sp * 1.2); // [TEST] 화면 정가운데 고정 (인트로 3의 컷 구도만 잠깐 옮김, 스크롤하면 앞으로만 다가옴)
 		// 글자 애니메이션 중이면 타이틀·PROJECT 다시 그림
 		if (txtDirty) {
 			txtDirty = false;
