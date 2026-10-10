@@ -82,7 +82,8 @@
 			parallax: 0.35, // 마우스 방향으로 도형이 따라 움직이는 거리
 			scroll: true, // 스크롤하면 도형 회전·확대 + 타이틀 위로 사라짐 (#project_visual 높이 필요)
 			scrollChroma: 1.2, // 스크롤 속도만큼 무지개 번짐 증가
-			autoMorph: 2, // 자동 변형: 도형이 멈춰 있는 시간(초)마다 다음 도형으로 (0 = 끔, 클릭 변형은 그대로)
+			autoMorph: 3, // 자동 변형 간격(초): 변형이 시작되는 시점끼리의 간격 (0 = 끔, 클릭 변형은 그대로)
+			spin: 0.6, // 도형이 계속 도는 속도(라디안/초, 세로축) — 0 = 기존처럼 살짝 흔들리기만
 			flute: 0.32, // 유리 칸막이(세로 골 유리) 굴절 세기 — 글자·도형 앞에 화면 전체로 깔림 (0 = 끔)
 			fluteWidth: 40, // 골 하나의 폭(px)
 		},
@@ -779,7 +780,7 @@
 			fragmentShader: glassFS,
 			side,
 		});
-	const backMat = makeGlass(THREE.BackSide, 0.35);
+	const backMat = makeGlass(THREE.BackSide, CFG.fx.backBright !== undefined ? CFG.fx.backBright : 0.35); // [TEST] 뒷면 밝기 (높을수록 속이 비쳐 보여 유리 같음)
 	const frontMat = makeGlass(THREE.FrontSide, 1.0);
 
 	const rtBg = new THREE.WebGLRenderTarget(1, 1);
@@ -1110,8 +1111,9 @@
 		glow.value.set(glowP.x * DPR, (H - glowP.y) * DPR);
 
 		// [TEST] 자동 변형: 대기 시간이 지나면 다음 도형으로 (드래그 중·인트로 중엔 기다림, 클릭하면 타이머 초기화)
-		if (stage.end === undefined) stage.end = t;
-		if (!reduce && FX.autoMorph > 0 && stage.start < 0 && !drag.on && intro.s > 0.99 && t - stage.end >= FX.autoMorph) stage.start = t;
+		if (stage.last === undefined) stage.last = t; // 마지막 변형 시작 시점 (클릭으로 시작해도 갱신)
+		if (stage.start >= 0 && stage.start !== stage.last) stage.last = stage.start;
+		if (!reduce && FX.autoMorph > 0 && stage.start < 0 && !drag.on && intro.s > 0.99 && t - stage.last >= FX.autoMorph) stage.start = stage.last = t;
 		const st = reduce ? { from: START, to: (START + 1) % SHAPES.length, u: 0 } : stageAt(t);
 		if (st.from !== curFrom) {
 			setPair(st.from, st.to);
@@ -1153,7 +1155,7 @@
 		scr.v *= 0.92; // 스크롤 멈추면 속도 감소
 		const sp = Math.min(1, scr.p); // 첫 화면 구간(0~1)
 		// 스크롤 + 인트로 회전 (프로젝트를 내리는 동안에도 계속 천천히 돎)
-		eFx.set(sp * 0.6 + scr.p * 0.25, scr.p * Math.PI * 0.6 + intro.spin, intro.spin * 0.3);
+		eFx.set(sp * 0.6 + scr.p * 0.25, scr.p * Math.PI * 0.6 + intro.spin + t * FX.spin * m, intro.spin * 0.3); // + 계속 회전
 		qFx.setFromEuler(eFx);
 		prism.quaternion.premultiply(qFx);
 		// 마우스 방향으로 따라 움직임 + 스크롤하면 카메라 쪽으로 다가옴
