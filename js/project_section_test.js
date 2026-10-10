@@ -5,7 +5,7 @@
  *   2) 카드 안 이미지는 스크롤에 따라 위아래로 천천히 움직임 (패럴랙스)
  *   3) 태그 칩·프로젝트명이 카드보다 조금 늦게 따라 들어옴
  * 호버(1024px 이상 + 마우스 기기만): 바로가기 아이콘이 마우스를 살짝 따라감
- *   (이미지 확대·소개 오버레이는 CSS — test.html의 @media (min-width: 1024px) and (hover: hover))
+ *   (이미지 확대·소개 오버레이는 CSS — index.html의 @media (min-width: 1024px) and (hover: hover))
  * 모션 줄이기 설정이면 애니메이션 없이 그대로 보여 줌
  */
 (function () {
