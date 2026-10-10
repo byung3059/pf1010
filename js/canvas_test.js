@@ -276,7 +276,7 @@
 	const rip = { value: new THREE.Vector3(0, 0, 99) }; // x, y(px), 경과 시간
 	const textShift = { value: 0 };
 	const textA = { value: 1 };
-	const projA = { value: 1 }; // PROJECT 투명도 (카드가 올라오면 사라짐)
+	const projA = { value: 1 }; // PROJECT 투명도 (사라질 때는 글자 효과로 처리하므로 1 고정)
 	// 색 + 투명도 파싱: "rgba(r,g,b,a)" / "#rrggbbaa" / 일반 색 → { color, alpha }
 	function parseRGBA(str) {
 		const s = String(str || "").trim();
@@ -967,9 +967,24 @@
 			gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, delay: 0.2, onUpdate: markDirty });
 		}
 	}
+	// 카드가 올라오면(1.6화면) PROJECT도 등장과 같은 글자 효과로 위로 빠지고, 다시 올리면(1.5화면 미만) 위에서 내려옴
+	let projOut = false;
+	function setProjOut(o) {
+		if (o === projOut || !window.gsap) return;
+		projOut = o;
+		gsap.killTweensOf(projChars);
+		gsap.to(projChars, { v: o ? 1 : 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
+	}
 	const checkTitle = (t) => {
 		if (t > 0.12) setTitleOut(true);
-		else if (t < 0.06) setTitleOut(false);
+		else if (t < 0.06) {
+			projOut = false;
+			setTitleOut(false);
+		}
+		if (titleOut) {
+			if (t > 1.6) setProjOut(true);
+			else if (t < 1.5) setProjOut(false);
+		}
 	};
 	if (FX.scroll && FXON) {
 		document.documentElement.classList.add("has-proj-fx"); // 캔버스가 PROJECT를 그리므로 DOM 제목은 CSS로 숨김
@@ -1067,8 +1082,6 @@
 			drawTitle(W, H);
 			drawProj(W, H);
 		}
-		// PROJECT: 카드가 올라오는 동안(1.6 → 2.1화면) 서서히 사라짐
-		projA.value = 1 - Math.min(1, Math.max(0, (scr.p - 1.6) / 0.5));
 		// 스크롤 속도만큼 무지개 번짐
 		backMat.uniforms.uChroma.value = frontMat.uniforms.uChroma.value = CFG.chroma + scr.vs * FX.scrollChroma;
 		// 렌즈 위치·세기
@@ -1095,7 +1108,7 @@
 		renderer.render(bgScene, orthoCam);
 		prism.material = frontMat;
 		renderer.render(scene, camera);
-		if (projA.value > 0.001 && projChars.some((c) => c.v > -1)) renderer.render(projScene, orthoCam); // [TEST]
+		if (projChars.some((c) => Math.abs(c.v) < 1)) renderer.render(projScene, orthoCam); // [TEST] 보이는 글자가 있을 때만
 	}
 	tick();
 })();
