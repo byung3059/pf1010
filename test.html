@@ -22,7 +22,19 @@
 			/* [TEST] 프로젝트 카드 — 8px 배수 가이드 (간격·크기·여백 모두 8의 배수) */
 			#project_site .pro_list { gap: 80px 24px; }
 			#project_site .pro_site a { border-radius: 8px; }
-			#project_site .pro_card { font-family: "Pretendard", sans-serif; color: #fff; }
+			#project_site .pro_card { background: none !important; font-family: "Pretendard", sans-serif; color: #fff; will-change: transform, clip-path; }
+			/* 이미지: 카드보다 위아래로 크게 → 스크롤 패럴랙스 여유, 호버 확대는 scale 속성(GSAP transform과 따로 동작) */
+			#project_site .pro_img { position: absolute; left: 0; top: -8%; width: 100%; height: 116%; background: no-repeat center center / cover; transition: scale 0.8s cubic-bezier(0.35, 0, 0, 1); will-change: transform; }
+			#project_site .pro_site.--01 .pro_img { background-image: url("./images/1.jpg"); }
+			#project_site .pro_site.--02 .pro_img { background-image: url("./images/2.jpg"); }
+			#project_site .pro_site.--03 .pro_img { background-image: url("./images/3.jpg"); }
+			#project_site .pro_site.--04 .pro_img { background-image: url("./images/4.jpg"); }
+			#project_site .pro_site.--05 .pro_img { background-image: url("./images/5.jpg"); }
+			#project_site .pro_site.--06 .pro_img { background-image: url("./images/6.jpg"); }
+			#project_site .pro_site.--07 .pro_img { background-image: url("./images/7.jpg"); }
+			#project_site .pro_site.--08 .pro_img { background-image: url("./images/8.jpg"); }
+			#project_site .pro_site.--09 .pro_img { background-image: url("./images/9.jpg"); }
+			#project_site .pro_site.--10 .pro_img { background-image: url("./images/10.jpg"); }
 			/* 호버 시: 어두운 막 + 소개 */
 			#project_site .pro_info { z-index: 2; position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; padding: 24px 24px 96px; background: rgba(0, 0, 0, 0.56); opacity: 0; transition: opacity 0.4s; }
 			#project_site .pro_info > * { transform: translateY(16px); opacity: 0; transition: transform 0.6s cubic-bezier(0.35, 0, 0, 1), opacity 0.6s; }
@@ -32,28 +44,28 @@
 			#project_site .pro_desc li { position: relative; padding-left: 8px; font-size: 14px; line-height: 24px; color: rgba(255, 255, 255, 0.88); }
 			#project_site .pro_desc li::before { content: ""; position: absolute; left: 0; top: 11px; width: 2px; height: 2px; border-radius: 50%; background: currentColor; }
 			/* 바로가기 아이콘 (오른쪽 위) */
-			#project_site .pro_go { z-index: 3; position: absolute; top: 24px; right: 24px; width: 56px; height: 56px; color: #fff; opacity: 0; transform: translate(-8px, 8px); transition: opacity 0.4s, transform 0.6s cubic-bezier(0.35, 0, 0, 1); }
+			#project_site .pro_go { z-index: 3; position: absolute; top: 24px; right: 24px; width: 56px; height: 56px; color: #fff; opacity: 0; translate: -8px 8px; transition: opacity 0.4s, translate 0.6s cubic-bezier(0.35, 0, 0, 1); }
 			#project_site .pro_go svg { display: block; width: 100%; height: 100%; }
 			/* 태그 칩 (왼쪽 아래) — 평소 흰색, 호버 시 반투명 */
 			#project_site .pro_tag { z-index: 3; position: absolute; left: 24px; bottom: 24px; display: flex; flex-wrap: wrap; gap: 8px; }
 			#project_site .pro_tag li { display: flex; align-items: center; height: 32px; padding: 0 24px; border-radius: 4px; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08); color: #111; font-size: 12px; font-weight: 700; letter-spacing: 0.02em; transition: background-color 0.4s, color 0.4s; }
-			@media (hover: hover) {
+			/* 호버 애니메이션은 1024px 이상 + 마우스 기기에서만 */
+			@media (min-width: 1024px) and (hover: hover) {
+				#project_site .pro_card:hover .pro_img { scale: 1.06; }
 				#project_site .pro_card:hover .pro_info,
 				#project_site .pro_card:focus-visible .pro_info { opacity: 1; }
 				#project_site .pro_card:hover .pro_info > *,
 				#project_site .pro_card:focus-visible .pro_info > * { transform: none; opacity: 1; }
 				#project_site .pro_card:hover .pro_go,
-				#project_site .pro_card:focus-visible .pro_go { opacity: 1; transform: none; }
+				#project_site .pro_card:focus-visible .pro_go { opacity: 1; translate: 0 0; }
 				#project_site .pro_card:hover .pro_tag li,
 				#project_site .pro_card:focus-visible .pro_tag li { background: rgba(255, 255, 255, 0.16); color: #fff; }
 			}
 			/* 프로젝트명: 카드 아래 오른쪽 */
 			#project_site .pro_name { z-index: 2; position: relative; margin-top: 16px; font-family: "Pretendard", sans-serif; font-size: 24px; line-height: 32px; font-weight: 700; color: #fff; text-align: right; }
-			#project_site .pro_name.fx-slot { display: flex; justify-content: flex-end; height: 32px; line-height: 32px; white-space: nowrap; overflow: hidden; }
 			@media (max-width: 768px) {
 				#project_site .pro_list { gap: 48px; }
 				#project_site .pro_name { margin-top: 8px; font-size: 16px; line-height: 24px; }
-				#project_site .pro_name.fx-slot { height: 24px; line-height: 24px; }
 				#project_site .pro_tag { left: 16px; bottom: 16px; }
 				#project_site .pro_tag li { height: 24px; padding: 0 16px; font-size: 10px; }
 				#project_site .pro_go { top: 16px; right: 16px; width: 32px; height: 32px; }
@@ -170,8 +182,7 @@
 		<script src="./js/cursor.js" defer></script>
 		<script src="./js/smooth_scroll.js" defer></script>
 		<script src="./js/scrollbar_test.js" defer></script>
-		<script>window.PROJECT_FEATURED_CONFIG = { radius: 8 }; // [TEST] 카드 모서리 8px (CSS와 동일)</script>
-		<script src="./js/project_featured_test.js" defer></script>
+		<script src="./js/project_section_test.js" defer></script>
 		<script src="./js/custom.js" defer></script>
 	</head>
 
@@ -210,6 +221,7 @@
 				<div class="pro_list">
 					<div class="pro_site --01">
 						<a href="" class="pro_card">
+							<span class="pro_img"></span>
 							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
 							<div class="pro_info">
 								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
@@ -223,6 +235,7 @@
 					</div>
 					<div class="pro_site --02">
 						<a href="" class="pro_card">
+							<span class="pro_img"></span>
 							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
 							<div class="pro_info">
 								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
@@ -236,6 +249,7 @@
 					</div>
 					<div class="pro_site --03">
 						<a href="" class="pro_card">
+							<span class="pro_img"></span>
 							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
 							<div class="pro_info">
 								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
@@ -249,6 +263,7 @@
 					</div>
 					<div class="pro_site --04">
 						<a href="" class="pro_card">
+							<span class="pro_img"></span>
 							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
 							<div class="pro_info">
 								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
@@ -262,6 +277,7 @@
 					</div>
 					<div class="pro_site --05">
 						<a href="" class="pro_card">
+							<span class="pro_img"></span>
 							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
 							<div class="pro_info">
 								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
@@ -275,6 +291,7 @@
 					</div>
 					<div class="pro_site --06">
 						<a href="" class="pro_card">
+							<span class="pro_img"></span>
 							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
 							<div class="pro_info">
 								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
@@ -288,6 +305,7 @@
 					</div>
 					<div class="pro_site --07">
 						<a href="" class="pro_card">
+							<span class="pro_img"></span>
 							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
 							<div class="pro_info">
 								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
@@ -301,6 +319,7 @@
 					</div>
 					<div class="pro_site --08">
 						<a href="" class="pro_card">
+							<span class="pro_img"></span>
 							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
 							<div class="pro_info">
 								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
@@ -314,6 +333,7 @@
 					</div>
 					<div class="pro_site --09">
 						<a href="" class="pro_card">
+							<span class="pro_img"></span>
 							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
 							<div class="pro_info">
 								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
@@ -327,6 +347,7 @@
 					</div>
 					<div class="pro_site --10">
 						<a href="" class="pro_card">
+							<span class="pro_img"></span>
 							<span class="pro_go"><svg viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M24 8H8v40h40V32" stroke="currentColor" stroke-width="4"/><path d="M30 26 48 8M32 8h16v16" stroke="currentColor" stroke-width="4"/></svg></span>
 							<div class="pro_info">
 								<!-- [샘플 문구] 실제 프로젝트 소개로 바꿔 넣기 -->
