@@ -1438,21 +1438,20 @@
 			const box = document.createElement("div");
 			box.className = "intro2";
 			box.innerHTML = `
-				<div class="i2-meta"><span>Detail Oriented</span><span>Loading</span></div>
+				<div class="i2-meta"><span class="i2-count"><span class="i2-num">000</span>%</span><span>Loading</span></div>
 				<div class="i2-bar"><i></i></div>
-				<div class="i2-count"><span class="i2-num">000</span><span class="i2-pct">%</span></div>`;
+`;
 			const css = document.createElement("style");
 			css.textContent = `
 				.intro2 { position: fixed; inset: 0; z-index: 60; pointer-events: none; color: #fff; font-family: ${font}; }
 				.intro2 { --side: 80px; }
 				@media (max-width: 1660px) { .intro2 { --side: 40px; } }
 				@media (max-width: 768px) { .intro2 { --side: 20px; } }
-				.intro2 .i2-meta { position: absolute; left: var(--side); right: var(--side); bottom: 120px; display: flex; justify-content: space-between; font-size: 12px; line-height: 16px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.56; }
-				.intro2 .i2-bar { position: absolute; left: var(--side); right: var(--side); bottom: 96px; height: 8px; background: repeating-linear-gradient(90deg, rgba(255,255,255,0.24) 0 1px, transparent 1px 40px); }
+				.intro2 .i2-meta { position: absolute; left: var(--side); right: var(--side); bottom: calc(var(--side) + 24px); display: flex; justify-content: space-between; font-size: 12px; line-height: 16px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.56; }
+				.intro2 .i2-bar { position: absolute; left: var(--side); right: var(--side); bottom: var(--side); height: 8px; background: repeating-linear-gradient(90deg, rgba(255,255,255,0.24) 0 1px, transparent 1px 40px); }
 				.intro2 .i2-bar i { position: absolute; left: 0; top: 3px; width: 100%; height: 2px; background: #fff; transform-origin: 0 50%; transform: scaleX(0); }
-				.intro2 .i2-count { position: absolute; right: var(--side); top: 40px; display: flex; align-items: flex-start; gap: 8px; font-size: clamp(64px, 10vw, 160px); line-height: 0.8; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -0.04em; }
-				.intro2 .i2-pct { font-size: 0.24em; line-height: 1; opacity: 0.56; }
-				@media (max-width: 768px) { .intro2 .i2-count { top: 80px; } }`;
+				.intro2 .i2-count { font-variant-numeric: tabular-nums; }
+`;
 			document.head.appendChild(css);
 			document.body.appendChild(box);
 			const $ = (q) => box.querySelector(q);
@@ -1477,7 +1476,7 @@
 			introStart = () => {
 				introTl = gsap.timeline({ onComplete: finish });
 				introTl
-					.from([$(".i2-meta"), $(".i2-bar"), $(".i2-count")], { y: 16, autoAlpha: 0, duration: 0.5, ease: "power3.out", stagger: 0.06 }, 0.1)
+					.from([$(".i2-meta"), $(".i2-bar")], { y: 16, autoAlpha: 0, duration: 0.5, ease: "power3.out", stagger: 0.06 }, 0.1)
 					// 1) 로딩: 0 → 100% (4·8의 배수 단계로 숫자가 바뀜) — 도형은 진행에 맞춰 4각 → … → 원 → 4각으로 부드럽게 이어서 변형
 					.to(load, {
 						p: 1,
@@ -1490,7 +1489,7 @@
 						},
 					}, 0.3)
 					// 2) 공개: 글자 빠지고, 도형이 커지며 칸막이가 가운데 열부터 한 열씩 끼워짐
-					.to([$(".i2-count"), $(".i2-meta"), $(".i2-bar")], { y: -16, autoAlpha: 0, duration: 0.7, ease: "power2.inOut", stagger: 0.06 }, 3.4)
+					.to([$(".i2-meta"), $(".i2-bar")], { y: -16, autoAlpha: 0, duration: 0.7, ease: "power2.inOut", stagger: 0.06 }, 3.4)
 					.add(() => gsap.fromTo(flash, { value: 0.35 }, { value: 0, duration: 1.6, ease: "power2.out" }), 3.6)
 					.to(intro, { s: 1, duration: 2.0, ease: "power3.inOut" }, 3.4)
 					.to(fluteMat.uniforms.uSweep, { value: colsMax, duration: 1.6, ease: "power2.inOut" }, 3.6)
