@@ -1061,121 +1061,201 @@
 	let introStart = null,
 		frame = 0;
 	if (FX.intro && FXON && window.gsap) {
-		// [TEST] 처음 (정면에서 시작):
-		//   1) 채우기 — 가는 선이 한 줄씩 그려지며 면을 채움 (바깥 사각 → 안쪽 원 구멍까지 점점 모양이 바뀌는 선들)
-		//   2) 쌓기   — 같은 선 묶음이 앞쪽부터 한 겹씩 뒤로 쌓이며 도형이 살짝 기울어 층이 보임
-		//   3) 펼치기 — 옆면이 보이도록 '샥' 돌면서 층 사이가 벌어져 두께가 펼쳐지고, 그 자리에 유리 몸체가 차오름 → 번쩍
-		//   → 선 사라짐 → 타이틀 → 헤더 → 그 뒤부터 도형 변형 시작
+		// [TEST] 인트로 — 점 · 선 · 면이 웹 레이아웃을 짜듯 각지게 선을 맞춰 가다 유리 오브젝트가 됨 (모든 치수 8의 배수)
+		//   1) 점   : 화면 정가운데 점 하나 + 좌표 라벨 "0, 0"
+		//   2) 선   : 점에서 가로·세로 가이드선이 화면 끝까지 뻗고, 40px 간격 격자가 가운데부터 한 줄씩 그려짐 (간격 숫자 표시)
+		//   3) 면   : 격자 칸에 딱 붙는 블록들(헤더·비주얼·카드 영역)이 한 칸에서 제 크기로 '착착' 펼쳐짐 → 가운데로 모여 하나의 사각형
+		//   4) 입체 : 사각형 가운데가 원형으로 뚫리고 → 유리 너트로 바뀌며 두께가 생김 (번쩍)
+		//   5) 정렬 : 가이드 격자가 지금의 격자 유리 칸막이로 바뀌며 사라짐 → 타이틀 → 헤더가 맨 위 가이드에 맞춰 자리 잡음
 		intro.s = 1;
 		intro.spin = 0;
 		intro.depth = 0.02;
-		intro.face = 1; // 1 = 정면 자세 고정, 0 = 평소 자세
+		intro.face = 1; // 정면 자세 고정 (2D 사각형과 겹치도록)
 		intro.rx = 0;
 		intro.ry = 0;
 		intro.done = false;
-		build.value = 0;
+		build.value = 0; // 유리 몸체 숨김
 		const hdr = document.querySelectorAll("#header .logo, #header #gnb li, #header .m_menu_btn");
 		gsap.set(hdr, { autoAlpha: 0, y: -16 });
 		document.documentElement.classList.remove("intro-pending"); // 헤더 깜빡임 방지 클래스 (test.html head에서 붙임)
+		// 칸막이(격자 유리)는 처음엔 0 → 가이드 격자가 사라질 때 차오름
+		const fluteTarget = { s: fluteMat.uniforms.uShift.value, t: fluteMat.uniforms.uShiftT.value };
+		fluteMat.uniforms.uShift.value = fluteMat.uniforms.uShiftT.value = 0;
 
-		// 선: 링 RINGS줄(바깥 사각 → 안쪽 원) × 층 LAYERS겹, 각 줄은 둘레 SEG분할 (도형 면 = 로컬 XY, 두께 = 로컬 Z ±0.45)
-		const RINGS = 14,
-			LAYERS = MOBILE ? 10 : 16,
-			SEG = 96;
-		const sqR = polyR(4, 2.1, SQ);
-		const nV = RINGS * LAYERS * SEG * 2;
-		const lPos = new Float32Array(nV * 3),
-			lT = new Float32Array(nV), // 둘레 위치 0~1 (그려지는 순서)
-			lRing = new Float32Array(nV), // 줄 번호 0~1 (바깥 → 안)
-			lLayer = new Float32Array(nV); // 층 0~1 (앞 → 뒤)
-		let vi = 0;
-		for (let L = 0; L < LAYERS; L++) {
-			const lz = L / (LAYERS - 1);
-			for (let R = 0; R < RINGS; R++) {
-				const f = R / (RINGS - 1);
-				for (let k = 0; k < SEG; k++) {
-					for (const kk of [k, k + 1]) {
-						const th = HX + (kk / SEG) * Math.PI * 2; // 12시에서 시작
-						const rr = sqR(th) * (1 - f) + 1.18 * f; // 사각 → 원
-						lPos[vi * 3] = Math.cos(th) * rr;
-						lPos[vi * 3 + 1] = Math.sin(th) * rr;
-						lPos[vi * 3 + 2] = 0.45 - lz * 0.9; // 앞면(+) → 뒷면(-)
-						lT[vi] = kk / SEG;
-						lRing[vi] = f;
-						lLayer[vi] = lz;
-						vi++;
+		// 2D 오버레이 캔버스 (WebGL 위, 헤더 아래)
+		const ov = document.createElement("canvas");
+		ov.className = "intro_layout";
+		ov.style.cssText = "position:fixed;inset:0;width:100%;height:100%;z-index:50;pointer-events:none;";
+		document.body.appendChild(ov);
+		const oc = ov.getContext("2d");
+		const G = 40; // 가이드 격자 간격 (= 칸막이 골 폭)
+		const snap = (v) => Math.round(v / 8) * 8; // 8px 단위로 맞춤
+		const S = { dot: 0, label: 0, cross: 0, grid: 0, gridA: 1, nums: 0, gather: 0, hole: 0, sqA: 1 };
+		// 블록: 화면 가운데 기준 격자 칸 단위 [x0, y0, x1, y1] (웹 레이아웃 와이어프레임: 헤더 / 비주얼 / 카드 2개 / 하단)
+		const BLOCKS = [
+			[-0.9, -0.92, 0.9, -0.8],
+			[-0.9, -0.7, 0.9, -0.08],
+			[-0.9, 0.02, -0.04, 0.62],
+			[0.04, 0.02, 0.9, 0.62],
+			[-0.9, 0.72, 0.9, 0.84],
+		].map((b) => ({ b, p: 0 }));
+		function drawIntro() {
+			const w = window.innerWidth,
+				h = window.innerHeight,
+				d = Math.min(window.devicePixelRatio || 1, 2);
+			if (ov.width !== Math.floor(w * d)) ov.width = Math.floor(w * d);
+			if (ov.height !== Math.floor(h * d)) ov.height = Math.floor(h * d);
+			oc.setTransform(d, 0, 0, d, 0, 0);
+			oc.clearRect(0, 0, w, h);
+			const cx = snap(w / 2),
+				cy = snap(h / 2);
+			oc.lineWidth = 1;
+			// 격자: 가운데에서 k번째 선이 차례로 (k가 작을수록 먼저), 선은 가운데에서 바깥으로 뻗음
+			const kx = Math.ceil(w / 2 / G),
+				ky = Math.ceil(h / 2 / G),
+				km = Math.max(kx, ky);
+			if (S.grid > 0 && S.gridA > 0) {
+				oc.strokeStyle = `rgba(255,255,255,${0.16 * S.gridA})`;
+				oc.beginPath();
+				for (let k = 1; k <= km; k++) {
+					const q = Math.min(1, Math.max(0, S.grid * km * 1.3 - k + 1));
+					if (q <= 0) break;
+					const e = 1 - Math.pow(1 - q, 4);
+					if (k <= kx) for (const sx of [-1, 1]) {
+						const x = cx + sx * k * G + 0.5;
+						oc.moveTo(x, cy - (h / 2) * e);
+						oc.lineTo(x, cy + (h / 2) * e);
 					}
+					if (k <= ky) for (const sy of [-1, 1]) {
+						const y = cy + sy * k * G + 0.5;
+						oc.moveTo(cx - (w / 2) * e, y);
+						oc.lineTo(cx + (w / 2) * e, y);
+					}
+				}
+				oc.stroke();
+				// 간격 숫자 (가로축 위, 가운데에서 6칸까지) — 선이 생길 때 잠깐 떴다 사라짐
+				oc.font = '500 10px "Pretendard", monospace';
+				oc.fillStyle = `rgba(255,255,255,${0.5 * S.nums * S.gridA})`;
+				for (let k = 1; k <= 6; k++) {
+					const q = S.grid * km * 1.3 - k + 1;
+					const a = q > 0 ? Math.max(0, 1 - Math.abs(q - 0.6) * 0.6) : 0;
+					if (a <= 0) continue;
+					oc.globalAlpha = a;
+					oc.fillText(String(k * G), cx + k * G + 4, cy - 4);
+				}
+				oc.globalAlpha = 1;
+			}
+			// 십자 가이드선
+			if (S.cross > 0 && S.gridA > 0) {
+				oc.strokeStyle = `rgba(255,255,255,${0.55 * S.gridA})`;
+				oc.beginPath();
+				oc.moveTo(cx - (w / 2) * S.cross, cy + 0.5);
+				oc.lineTo(cx + (w / 2) * S.cross, cy + 0.5);
+				oc.moveTo(cx + 0.5, cy - (h / 2) * S.cross);
+				oc.lineTo(cx + 0.5, cy + (h / 2) * S.cross);
+				oc.stroke();
+			}
+			// 점 + 좌표 라벨
+			if (S.dot > 0 && S.sqA > 0 && S.gather < 1) {
+				oc.fillStyle = `rgba(255,255,255,${1 - S.gather})`;
+				oc.fillRect(cx - 4 * S.dot, cy - 4 * S.dot, 8 * S.dot, 8 * S.dot); // 각진 점 (8px 정사각형)
+				oc.font = '500 10px "Pretendard", monospace';
+				oc.fillStyle = `rgba(255,255,255,${0.6 * S.label * (1 - S.gather)})`;
+				oc.fillText("0, 0", cx + 8, cy - 8);
+			}
+			// 면: 블록 → 가운데 사각형 (3D 너트를 정면에서 본 크기와 같게)
+			const ppw = h / 2 / (Math.tan((camera.fov * Math.PI) / 360) * camera.position.z); // 월드 1 = px
+			const sq = snap(2.1 * Math.cos(Math.PI / 4) * ppw);
+			const hx = Math.floor(w / 2 / G) * G,
+				hy = Math.floor(h / 2 / G) * G;
+			if (S.sqA > 0) {
+				BLOCKS.forEach((o, n) => {
+					if (o.p <= 0) return;
+					// 펼쳐짐: 블록의 첫 칸(왼쪽 위 한 칸)에서 제 크기로
+					const [bx0, by0, bx1, by1] = o.b;
+					const tx0 = snap(cx + bx0 * hx),
+						ty0 = snap(cy + by0 * hy),
+						tx1 = snap(cx + bx1 * hx),
+						ty1 = snap(cy + by1 * hy);
+					const e = 1 - Math.pow(1 - o.p, 4);
+					let x0 = tx0,
+						y0 = ty0,
+						x1 = snap(tx0 + G + (tx1 - tx0 - G) * e),
+						y1 = snap(ty0 + G + (ty1 - ty0 - G) * e);
+					// 모이기: 가운데 사각형으로
+					const g = S.gather < 0.5 ? 4 * S.gather ** 3 : 1 - Math.pow(-2 * S.gather + 2, 3) / 2;
+					x0 = snap(x0 + (cx - sq - x0) * g);
+					y0 = snap(y0 + (cy - sq - y0) * g);
+					x1 = snap(x1 + (cx + sq - x1) * g);
+					y1 = snap(y1 + (cy + sq - y1) * g);
+					oc.fillStyle = `rgba(255,255,255,${(0.06 + 0.1 * g) * S.sqA})`;
+					oc.fillRect(x0, y0, x1 - x0, y1 - y0);
+					oc.strokeStyle = `rgba(255,255,255,${(0.7 - 0.2 * g) * S.sqA})`;
+					oc.strokeRect(x0 + 0.5, y0 + 0.5, x1 - x0 - 1, y1 - y0 - 1);
+					// 블록 크기 라벨 (펼쳐질 때만)
+					if (g < 0.2 && e > 0.3) {
+						oc.font = '500 10px "Pretendard", monospace';
+						oc.fillStyle = `rgba(255,255,255,${0.45 * (1 - g * 5) * S.sqA})`;
+						oc.fillText(`${x1 - x0} × ${y1 - y0}`, x0 + 8, y0 + 16);
+					}
+				});
+				// 입체 전: 가운데 원형 구멍이 뚫림
+				if (S.hole > 0) {
+					oc.save();
+					oc.globalCompositeOperation = "destination-out";
+					oc.beginPath();
+					oc.arc(cx, cy, 1.18 * ppw * S.hole, 0, Math.PI * 2);
+					oc.fill();
+					oc.restore();
+					oc.strokeStyle = `rgba(255,255,255,${0.7 * S.sqA})`;
+					oc.beginPath();
+					oc.arc(cx, cy, 1.18 * ppw * S.hole, 0, Math.PI * 2);
+					oc.stroke();
 				}
 			}
 		}
-		const lGeo = new THREE.BufferGeometry();
-		lGeo.setAttribute("position", new THREE.BufferAttribute(lPos, 3));
-		lGeo.setAttribute("aT", new THREE.BufferAttribute(lT, 1));
-		lGeo.setAttribute("aRing", new THREE.BufferAttribute(lRing, 1));
-		lGeo.setAttribute("aLayer", new THREE.BufferAttribute(lLayer, 1));
-		const lineU = { uFill: { value: 0 }, uStack: { value: 0 }, uSpread: { value: 0.12 }, uFade: { value: 0 } };
-		const lines = new THREE.LineSegments(
-			lGeo,
-			new THREE.ShaderMaterial({
-				uniforms: lineU,
-				vertexShader: `
-          attribute float aT, aRing, aLayer;
-          uniform float uFill, uStack, uSpread;
-          varying float vShow, vA;
-          void main(){
-            // 채우기: 바깥 줄부터 차례로, 각 줄은 12시부터 시계 방향으로 그려짐
-            float ringP = clamp(uFill * 1.7 - aRing * 0.7, 0.0, 1.0);
-            // 쌓기: 앞 층(0)은 처음부터, 뒤 층은 uStack에 따라 한 겹씩 나타남
-            float layerOn = aLayer < 0.001 ? 1.0 : step(aLayer, uStack);
-            vShow = (aT <= ringP ? 1.0 : 0.0) * layerOn;
-            vA = 0.35 + 0.65 * (1.0 - aLayer); // 앞 층이 더 밝게
-            vec3 p = position;
-            p.z = 0.45 - (0.45 - p.z) * uSpread;   // 펼치기 전엔 층 간격이 좁게 압축
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
-          }`,
-				fragmentShader: `
-          uniform float uFade; varying float vShow, vA;
-          void main(){ if (vShow < 0.5) discard; gl_FragColor = vec4(vec3(1.0), vA * 0.55 * (1.0 - uFade)); }`,
-				transparent: true,
-				blending: THREE.AdditiveBlending,
-				depthTest: false,
-				depthWrite: false,
-			})
-		);
-		lines.frustumCulled = false;
-		prism.add(lines); // 도형과 같이 돌고 두께도 같이 (prism.scale.z는 intro.depth)
-		const spreadToDepth = () => (intro.depth = Math.max(0.02, lineU.uSpread.value)); // 층이 벌어진 만큼 유리 두께도
 
 		let introTl = null;
 		// 첫 프레임(셰이더 컴파일로 멈칫함)이 지난 뒤 시작 → 느린 기기에서도 앞부분이 잘리지 않음
 		introStart = () => {
+			gsap.ticker.add(drawIntro);
+			const SNAP = "power4.out"; // 끝에서 딱 멈추는 각진 이징
 			introTl = gsap.timeline({
 				onComplete: () => {
 					intro.done = true;
 					stage.last = clock.getElapsedTime();
-					prism.remove(lines); // 다 쓴 선 정리
-					lGeo.dispose();
+					gsap.ticker.remove(drawIntro);
+					ov.remove();
 				},
 			});
 			introTl
-				// 1) 채우기 (정면)
-				.to(lineU.uFill, { value: 1, duration: 1.5, ease: "power1.inOut" }, 0.15)
-				// 2) 쌓기: 살짝 기울어지며 층이 앞에서 뒤로 쌓임
-				.to(intro, { rx: 0.5, ry: -0.35, duration: 1.0, ease: "power2.inOut" }, 1.45)
-				.to(lineU.uStack, { value: 1, duration: 0.9, ease: "power1.in" }, 1.55)
-				// 3) 펼치기: 옆면이 보이게 '샥' 돌며 두께가 펼쳐짐 → 유리 몸체가 차오름
-				.to(intro, { ry: -1.25, duration: 0.45, ease: "power3.in" }, 2.45)
-				.to(lineU.uSpread, { value: 1, duration: 0.55, ease: "expo.out", onUpdate: spreadToDepth }, 2.75)
-				.to(build, { value: 1, duration: 0.5, ease: "power2.out" }, 2.8)
-				.to(intro, { face: 0, duration: 1.4, ease: "expo.out" }, 2.9) // 평소 자세로 돌아옴
+				// 1) 점
+				.to(S, { dot: 1, duration: 0.3, ease: "back.out(3)" }, 0.1)
+				.to(S, { label: 1, duration: 0.2, ease: "none" }, 0.25)
+				// 2) 선: 십자 → 격자 (+ 간격 숫자)
+				.to(S, { cross: 1, duration: 0.5, ease: "expo.inOut" }, 0.4)
+				.to(S, { grid: 1, duration: 0.8, ease: "power2.out" }, 0.7)
+				.to(S, { nums: 1, duration: 0.2, ease: "none" }, 0.7)
+				// 3) 면: 블록이 한 칸에서 제 크기로 '착착' → 가운데로 모임
+				.to(BLOCKS, { p: 1, duration: 0.45, ease: SNAP, stagger: 0.09 }, 1.15)
+				.to(S, { gather: 1, duration: 0.55, ease: "none" }, 1.9)
+				// 4) 입체: 구멍 → 유리로 바뀌며 두께
+				.to(S, { hole: 1, duration: 0.3, ease: SNAP }, 2.4)
 				.add(() => {
+					build.value = 1; // 유리 몸체 나타남 (2D 사각형 뒤에서)
 					gsap.fromTo(flash, { value: 1 }, { value: 0, duration: 1.0, ease: "power2.out" }); // 번쩍
-				}, 3.0)
-				.to(lineU.uFade, { value: 1, duration: 0.6, ease: "power2.out" }, 3.05) // 선 사라짐
+				}, 2.65)
+				.to(S, { sqA: 0, duration: 0.35, ease: "power2.out" }, 2.65) // 2D 사각형 사라짐
+				.to(intro, { depth: 1, duration: 0.6, ease: "expo.out" }, 2.7) // 두께 생김
+				.to(intro, { face: 0, duration: 1.3, ease: "expo.out" }, 2.8) // 평소 자세로 살짝 돌아감
+				// 5) 정렬: 가이드 격자 → 격자 유리 칸막이
+				.to(S, { gridA: 0, duration: 0.6, ease: "power2.out" }, 2.85)
+				.to(fluteMat.uniforms.uShift, { value: fluteTarget.s, duration: 0.8, ease: "power2.out" }, 2.85)
+				.to(fluteMat.uniforms.uShiftT, { value: fluteTarget.t, duration: 0.8, ease: "power2.out" }, 2.85)
 				.add(() => {
 					if (!titleOut) gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
-				}, 3.2) // 타이틀
-				.to(hdr, { autoAlpha: 1, y: 0, duration: 0.8, ease: "power3.out", stagger: 0.06 }, 3.6); // 헤더
+				}, 3.0) // 타이틀
+				.to(hdr, { autoAlpha: 1, y: 0, duration: 0.5, ease: SNAP, stagger: 0.05 }, 3.3); // 헤더: 맨 위 가이드에 '착'
 		};
 		// 인트로 중 클릭하면 바로 완성
 		window.addEventListener("click", () => {
