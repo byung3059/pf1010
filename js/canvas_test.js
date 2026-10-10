@@ -1435,6 +1435,10 @@
 			// 퍼센트는 8px 그리드처럼 4·8의 배수로만 올라감
 			const PCT = [0, 4, 8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 100];
 			const font = `"${CFG.fontFamily}", "Unbounded", sans-serif`;
+			// 메인 타이틀과 같은 글자 크기: 1024px 초과는 textSize(px), 이하는 textSizeM(vw), 480px 이하 덮어쓰기
+			const vw2 = window.innerWidth;
+			const r480b = (CFG.responsive || {})[480] || {};
+			const fsT = vw2 <= 480 && r480b.textSizeM ? (vw2 * r480b.textSizeM) / 100 : vw2 <= 1024 ? (vw2 * CFG.textSizeM) / 100 : CFG.textSize;
 			const box = document.createElement("div");
 			box.className = "intro2";
 			box.innerHTML = `
@@ -1450,7 +1454,10 @@
 				.intro2 .i2-meta { position: absolute; left: var(--side); right: var(--side); bottom: calc(var(--side) + 24px); display: flex; justify-content: space-between; font-size: 12px; line-height: 16px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.56; }
 				.intro2 .i2-bar { position: absolute; left: var(--side); right: var(--side); bottom: var(--side); height: 8px; background: repeating-linear-gradient(90deg, rgba(255,255,255,0.24) 0 1px, transparent 1px 40px); }
 				.intro2 .i2-bar i { position: absolute; left: 0; top: 3px; width: 100%; height: 2px; background: #fff; transform-origin: 0 50%; transform: scaleX(0); }
-				.intro2 .i2-count { font-variant-numeric: tabular-nums; }
+				.intro2 .i2-meta { align-items: flex-end; opacity: 1; }
+				.intro2 .i2-meta > span:last-child { opacity: 0.56; }
+				/* 퍼센트 숫자: 메인 타이틀(DETAIL ORIENTED.)과 같은 크기·굵기 */
+				.intro2 .i2-count { font-size: ${fsT}px; line-height: 1; font-weight: ${CFG.textWeight}; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
 `;
 			document.head.appendChild(css);
 			document.body.appendChild(box);
