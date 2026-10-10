@@ -23,6 +23,9 @@
 			darkReflect: 0, // 어두운 반사 띠 세기 0~1 (스튜디오 유리 느낌)
 			reflectFringe: 0.04, // 반사 띠 경계의 색 갈라짐 폭
 			lightReflect: 0, // 밝은 반사 띠 세기 0~1 (어두운 배경에서 입체감)
+			envReflect: 0, // [TEST] 스튜디오 조명 반사 0~2: 위·옆 조명판이 비쳐 모서리엔 가는 흰 선, 정면은 어둡게 (어두운 유리 느낌)
+			bloom: 0, // [TEST] 밝은 부분 주변 은은한 빛 번짐 0~1
+			edgeLine: 0, // [TEST] 각진 모서리마다 가는 흰 하이라이트 선 0~2
 			dragSpeed: 0.008, // 드래그 회전 감도 (px당 라디안)
 			dragInertia: 0.95, // 놓은 뒤 관성 0~1 (1에 가까울수록 오래 돎)
 			bgColor2: "", // 배경 그라데이션 두 번째 색 (마우스를 따라다님). 비우면 단색
@@ -640,7 +643,7 @@
     }`;
 	const glassFS = `
     uniform sampler2D uTex; uniform vec2 uRes;
-    uniform float uPower, uChroma, uSat, uShine, uFres, uSpec, uClear, uIri, uEdge, uBlur, uIriFrom, uIriDeep, uRim, uShade, uRefl, uFringe, uLRefl;
+    uniform float uPower, uChroma, uSat, uShine, uFres, uSpec, uClear, uIri, uEdge, uBlur, uIriFrom, uIriDeep, uRim, uShade, uRefl, uFringe, uLRefl, uEnv, uLine;
     uniform vec3 uLight, uTint;
     varying vec3 vN; varying vec3 vEye;
     vec3 sat(vec3 c, float a){ return mix(vec3(dot(c, vec3(.2125,.7154,.0721))), c, a); }
@@ -668,6 +671,14 @@
       if (t < 0.72) return mix(c5, c6, (t - 0.62) / 0.10);
       if (t < 0.85) return mix(c6, c7, (t - 0.72) / 0.13);
       return mix(c7, c0, (t - 0.85) / 0.15);
+    }
+    // [TEST] 스튜디오 환경: 위 소프트박스 + 왼쪽·오른쪽 세로 조명 + 은은한 돔 (카메라 쪽엔 조명 없음 → 정면은 어두움)
+    float studio(vec3 r){
+      float top = smoothstep(0.6, 0.78, r.y) * (1.0 - smoothstep(0.45, 0.75, abs(r.x)));
+      float left = (1.0 - smoothstep(-0.88, -0.72, r.x)) * (1.0 - smoothstep(0.35, 0.65, abs(r.y - 0.05)));
+      float right = smoothstep(0.74, 0.9, r.x) * (1.0 - smoothstep(0.15, 0.4, abs(r.y + 0.15)));
+      float dome = smoothstep(-0.3, 1.0, r.y) * 0.07;
+      return top * 1.1 + left * 1.1 + right * 0.7 + dome;
     }
     vec3 samp(vec3 n, float ior, float off){
       vec3 r = refract(vEye, n, 1.0 / ior);
@@ -701,6 +712,19 @@
       // 밝은 반사 띠: 조명(소프트박스)이 곡면에 비침 → 어두운 배경에서 입체감
       vec3 lt = vec3(lightBand(yy + uFringe), lightBand(yy), lightBand(yy - uFringe));
       col += uLRefl * (0.35 + 0.65 * (1.0 - abs(dot(vEye, n)))) * lt;
+      // [TEST] 환경 반사 (프레넬: 정면 약하게, 비스듬할수록 강하게) — 채널별로 살짝 어긋나 모서리에 옅은 색 갈라짐
+      if (uEnv > 0.0) {
+        float F = 0.1 + 0.9 * pow(1.0 - abs(dot(vEye, n)), 3.0);
+        vec3 env = vec3(studio(rr + vec3(uFringe, 0.0, 0.0)), studio(rr), studio(rr - vec3(uFringe, 0.0, 0.0)));
+        col += env * F * uEnv;
+      }
+      // [TEST] 모서리·옆면 하이라이트: 비스듬히 기운 면(테두리·구멍 안쪽 벽·옆면)일수록 밝게, 정면은 어둡게 유지
+      //        + 면과 면이 만나는 선(fwidth로 검출)을 한 번 더 밝게 → 레퍼런스의 가는 흰 선
+      if (uLine > 0.0) {
+        float g = smoothstep(0.28, 0.85, 1.0 - abs(dot(vEye, n)));
+        float eLine = smoothstep(0.05, 0.3, length(fwidth(n)));
+        col += (g * g * g * (0.25 + 0.6 * min(studio(rr), 1.0)) * 1.3 + eLine * 1.1) * uLine;
+      }
       // 모서리(비스듬히 보이는 곡면): 무지개 분광 + 살짝 어두운 테두리 → 밝은 배경에서도 유리 윤곽이 보임
       float edge = 1.0 - abs(dot(vEye, n));
       float band = smoothstep(uIriFrom, uIriFrom + 0.35, edge) * (1.0 - smoothstep(0.93, 1.0, edge) * 0.5);
@@ -746,8 +770,11 @@
 				uRefl: { value: CFG.darkReflect },
 				uFringe: { value: CFG.reflectFringe },
 				uLRefl: { value: CFG.lightReflect },
+				uEnv: { value: CFG.envReflect },
+				uLine: { value: CFG.edgeLine },
 			},
 			defines: { SAMPLES },
+			extensions: { derivatives: true }, // [TEST] fwidth로 모서리 선 검출
 			vertexShader: glassVS,
 			fragmentShader: glassFS,
 			side,
@@ -767,10 +794,12 @@
 			uRes: res,
 			uW: { value: CFG.fx.fluteWidth * DPR },
 			uAmt: { value: CFG.fx.flute },
+			uBloom: { value: CFG.bloom },
+			uBloomR: { value: 9 * DPR },
 		},
 		vertexShader: `void main(){ gl_Position = vec4(position.xy, 0.0, 1.0); }`,
 		fragmentShader: `
-      uniform sampler2D tScene; uniform vec2 uRes; uniform float uW, uAmt;
+      uniform sampler2D tScene; uniform vec2 uRes; uniform float uW, uAmt, uBloom, uBloomR;
       void main(){
         vec2 p = gl_FragCoord.xy;
         float t = fract(p.x / uW);    // 골 안에서의 위치 0~1
@@ -789,6 +818,19 @@
         c /= 3.0;
         // 골 경계 아주 옅은 반사 (검은 배경에서는 거의 안 보임)
         c += pow(t, 14.0) * 0.025 * uAmt;
+        // [TEST] 블룸: 주변 밝은 부분을 원형으로 모아 은은하게 번지게
+        if (uBloom > 0.0) {
+          vec3 bl = vec3(0.0);
+          for (int i = 0; i < 12; i++) {
+            float a = float(i) * 0.5236;
+            for (int j = 1; j <= 2; j++) {
+              vec2 o = vec2(cos(a), sin(a)) * uBloomR * float(j) / uRes;
+              vec3 sc = texture2D(tScene, uv + o).rgb;
+              bl += max(sc - 0.55, 0.0);
+            }
+          }
+          c += bl / 24.0 * uBloom;
+        }
         gl_FragColor = vec4(c, 1.0);
       }`,
 		depthTest: false,
