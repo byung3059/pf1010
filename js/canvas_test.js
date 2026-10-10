@@ -1068,16 +1068,17 @@
 	if (FX.intro && FXON && window.gsap) {
 		// [TEST] 인트로 (새로 정리)
 		//   1) 선   : 칸막이 골 경계와 같은 자리(40px 간격)에 옅은 선이 가운데 쌍부터 양쪽 두 줄씩 그어짐
-		//   2) 도형 : 정면에서 납작하게 나타나 커지며 두께가 솟고 살짝 기울어 옆면이 보임
-		//   3) 멈춤 : 어긋나는 효과 없이(칸막이 0) 선 + 도형을 그대로 보여 줌
-		//   4) 효과 : 선이 사라지는 만큼 격자 유리 칸막이 효과가 차오름 → 평소 자세 → 타이틀 → 헤더
+		//   2) 도형 : 도형 좌표에 윤곽 라인을 먼저 그림 → 그 안에 유리가 차오르며 두께가 솟고 살짝 기울어 옆면 (이때부터 계속 돎)
+		//   3) 멈춤 : 어긋나는 효과 없이(칸막이 0) 선 + 도형을 그대로 보여 줌 (회전은 계속)
+		//   4) 효과 : 선·윤곽이 사라지는 만큼 격자 유리 칸막이 효과가 차오름 → 평소 자세 → 타이틀 → 헤더
 		const LINE_A = 0.1; // 선 투명도 rgba(255,255,255,0.1)
 		intro.done = false;
 		intro.face = 1; // 1 = 정면 자세 고정 (rx·ry만 적용)
 		intro.rx = 0;
 		intro.ry = 0;
-		intro.s = 0.6;
+		intro.s = 1;
 		intro.depth = 0.02;
+		intro.spinOn = false;
 		build.value = 0; // 유리 숨김
 		const hdr = document.querySelectorAll("#header .logo, #header #gnb li, #header .m_menu_btn");
 		gsap.set(hdr, { autoAlpha: 0, y: -16 });
@@ -1138,12 +1139,66 @@
 			oc.stroke();
 		}
 
+		// 도형 좌표 라인: 첫 도형(사각 너트)의 윤곽 — 앞면 사각·구멍 원 → 네 모서리 세로선 → 뒷면 (도형에 붙어 같이 돌고 두께도 따라감)
+		const half = 2.1 * Math.cos(Math.PI / 4),
+			zf = 0.45,
+			RH = 1.18;
+		const segs = []; // [x0,y0,z0, x1,y1,z1, 그려지는 순서 0~1]
+		const loop = (fn, n, z, t0, t1) => {
+			for (let k = 0; k < n; k++) {
+				const a = fn(k / n),
+					b = fn((k + 1) / n);
+				segs.push([a[0], a[1], z, b[0], b[1], z, t0 + ((t1 - t0) * k) / n]);
+			}
+		};
+		// 사각 둘레: 위 가운데에서 시작해 시계 방향
+		const sqPt = (u) => {
+			const p = (u * 8 + 1) % 8; // 둘레를 변 길이(=2) 단위 8로
+			if (p < 2) return [-half + p * half, half];
+			if (p < 4) return [half, half - (p - 2) * half];
+			if (p < 6) return [half - (p - 4) * half, -half];
+			return [-half, -half + (p - 6) * half];
+		};
+		const ciPt = (u) => [Math.cos(Math.PI / 2 - u * Math.PI * 2) * RH, Math.sin(Math.PI / 2 - u * Math.PI * 2) * RH];
+		loop(sqPt, 64, zf, 0.0, 0.45); // 앞면 사각
+		loop(ciPt, 96, zf, 0.25, 0.65); // 앞면 구멍
+		[[-half, -half], [half, -half], [half, half], [-half, half]].forEach(([x, y], n) => segs.push([x, y, zf, x, y, -zf, 0.62 + n * 0.03])); // 모서리 세로선
+		loop(sqPt, 64, -zf, 0.7, 1.0); // 뒷면 사각
+		loop(ciPt, 96, -zf, 0.75, 1.0); // 뒷면 구멍
+		const oPos = new Float32Array(segs.length * 6),
+			oT = new Float32Array(segs.length * 2);
+		segs.forEach((g, n) => {
+			oPos.set(g.slice(0, 6), n * 6);
+			oT[n * 2] = oT[n * 2 + 1] = g[6];
+		});
+		const oGeo = new THREE.BufferGeometry();
+		oGeo.setAttribute("position", new THREE.BufferAttribute(oPos, 3));
+		oGeo.setAttribute("aT", new THREE.BufferAttribute(oT, 1));
+		const outU = { uDraw: { value: 0 }, uA: { value: 0.8 } };
+		const outline = new THREE.LineSegments(
+			oGeo,
+			new THREE.ShaderMaterial({
+				uniforms: outU,
+				vertexShader: `attribute float aT; uniform float uDraw; varying float vOn;
+          void main(){ vOn = step(aT, uDraw); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+				fragmentShader: `uniform float uA; varying float vOn;
+          void main(){ if (vOn < 0.5) discard; gl_FragColor = vec4(vec3(1.0), uA); }`,
+				transparent: true,
+				depthTest: false,
+				depthWrite: false,
+			})
+		);
+		outline.frustumCulled = false;
+		prism.add(outline);
+
 		let introTl = null;
 		const finish = () => {
 			intro.done = true;
 			stage.last = clock.getElapsedTime();
 			gsap.ticker.remove(drawLines);
 			ov.remove();
+			prism.remove(outline);
+			oGeo.dispose();
 		};
 		// 첫 프레임(셰이더 컴파일로 멈칫함)이 지난 뒤 시작
 		introStart = () => {
@@ -1152,24 +1207,27 @@
 			introTl
 				// 1) 선: 가운데 쌍부터 두 줄씩
 				.to(L, { draw: 1, duration: 1.8, ease: "power1.inOut" }, 0.2)
-				// 2) 도형: 납작 → 커지며 두께 → 살짝 기울어 옆면
+				// 2-1) 도형 좌표에 윤곽 라인을 먼저 그림 (앞면 사각 → 구멍 → 모서리 → 뒷면)
+				.to(outU.uDraw, { value: 1, duration: 1.1, ease: "power2.inOut" }, 1.8)
+				// 2-2) 라인 안에 유리 도형이 차오르며 두께가 솟고, 살짝 기울어 옆면 — 이때부터 계속 돎
 				.add(() => {
 					build.value = 1;
+					intro.spinOn = true;
 					gsap.fromTo(flash, { value: 0.5 }, { value: 0, duration: 1.2, ease: "power2.out" });
-				}, 1.9)
-				.to(intro, { s: 1, duration: 1.4, ease: "expo.out" }, 1.9)
-				.to(intro, { depth: 1, duration: 1.4, ease: "back.out(1.4)" }, 1.95)
-				.to(intro, { rx: 0.4, ry: -0.55, duration: 1.3, ease: "power3.out" }, 2.0)
-				// 3) 멈춤: 효과 없이 그대로 (약 3.3 ~ 4.3초)
-				// 4) 효과: 선이 사라지는 만큼 칸막이 효과가 차오름
-				.to(L, { alpha: 0, duration: 1.0, ease: "power2.inOut" }, 4.3)
-				.to(fluteMat.uniforms.uShift, { value: fluteTarget.s, duration: 1.0, ease: "power2.inOut" }, 4.3)
-				.to(fluteMat.uniforms.uShiftT, { value: fluteTarget.t, duration: 1.0, ease: "power2.inOut" }, 4.3)
-				.to(intro, { face: 0, duration: 2.0, ease: "expo.out" }, 5.0) // 평소 자세로 (다시 돎)
+				}, 2.85)
+				.to(intro, { depth: 1, duration: 1.4, ease: "back.out(1.4)" }, 2.85)
+				.to(intro, { rx: 0.4, ry: -0.55, duration: 1.3, ease: "power3.out" }, 2.9)
+				// 3) 멈춤: 효과 없이 그대로 보여 줌 — 도형은 계속 돎 (약 4.2 ~ 5.2초)
+				// 4) 효과: 선·윤곽 라인이 사라지는 만큼 칸막이 효과가 차오름
+				.to(L, { alpha: 0, duration: 1.0, ease: "power2.inOut" }, 5.2)
+				.to(outU.uA, { value: 0, duration: 0.8, ease: "power2.inOut" }, 5.2)
+				.to(fluteMat.uniforms.uShift, { value: fluteTarget.s, duration: 1.0, ease: "power2.inOut" }, 5.2)
+				.to(fluteMat.uniforms.uShiftT, { value: fluteTarget.t, duration: 1.0, ease: "power2.inOut" }, 5.2)
+				.to(intro, { face: 0, duration: 2.0, ease: "expo.out" }, 5.6) // 평소 자세로
 				.add(() => {
 					if (!titleOut) gsap.to(titleFlat, { v: 0, duration: CH_DUR, ease: EASE_L, stagger: CH_STAG, onUpdate: markDirty });
-				}, 5.3) // 타이틀
-				.to(hdr, { autoAlpha: 1, y: 0, duration: 0.6, ease: "power4.out", stagger: 0.05 }, 5.6); // 헤더
+				}, 6.0) // 타이틀
+				.to(hdr, { autoAlpha: 1, y: 0, duration: 0.6, ease: "power4.out", stagger: 0.05 }, 6.3); // 헤더
 		};
 		// 인트로 중 클릭하면 끝으로 건너뜀
 		window.addEventListener("click", () => {
@@ -1347,7 +1405,7 @@
 		scr.v *= 0.92; // 스크롤 멈추면 속도 감소
 		const sp = Math.min(1, scr.p); // 첫 화면 구간(0~1)
 		// 스크롤 + 인트로 회전 (프로젝트를 내리는 동안에도 계속 천천히 돎)
-		intro.spinAcc = (intro.spinAcc || 0) + (t - (intro.lastT ?? t)) * (1 - intro.face); // 정면 고정 중엔 회전 멈춤
+		intro.spinAcc = (intro.spinAcc || 0) + (t - (intro.lastT ?? t)) * (intro.spinOn ? 1 : 1 - intro.face); // 인트로: 도형이 나온 뒤부터 계속 돎 // 정면 고정 중엔 회전 멈춤
 		intro.lastT = t;
 		eFx.set(sp * 0.6 + scr.p * 0.25, scr.p * Math.PI * 0.6 + intro.spin + intro.spinAcc * FX.spin * m, intro.spin * 0.3); // + 계속 회전 (인트로 끝난 뒤부터)
 		qFx.setFromEuler(eFx);
