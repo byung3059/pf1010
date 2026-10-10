@@ -84,8 +84,8 @@
 			scrollChroma: 1.2, // 스크롤 속도만큼 무지개 번짐 증가
 			autoMorph: 3, // 자동 변형 간격(초): 변형이 시작되는 시점끼리의 간격 (0 = 끔, 클릭 변형은 그대로)
 			spin: 0.6, // 도형이 계속 도는 속도(라디안/초, 세로축) — 0 = 기존처럼 살짝 흔들리기만
-			flute: 0.32, // 유리 칸막이(세로 골 유리) 굴절 세기 — 글자·도형 앞에 화면 전체로 깔림 (0 = 끔)
-			fluteWidth: 80, // 골 하나의 폭(px)
+			flute: 8, // 유리 칸막이(가로·세로 골 유리)에서 이미지가 어긋나는 최대 거리(px) — 글자·도형 앞에 화면 전체로 깔림 (0 = 끔)
+			fluteWidth: 40, // 골 하나의 폭(px)
 		},
 		(window.GLASS_CONFIG || {}).fx || {},
 	);
@@ -789,27 +789,29 @@
 	// [TEST] 유리 칸막이: 최종 장면을 한 번 더 그려서 세로 골(원통 렌즈) 모양으로 굴절
 	const FLUTE = CFG.fx.flute > 0 && CFG.fx.fluteWidth > 0;
 	const rtFinal = new THREE.WebGLRenderTarget(1, 1);
+	const rtGlow = new THREE.WebGLRenderTarget(1, 1); // 도형만 따로 (빛 번짐을 도형에만 주기 위해)
 	const fluteMat = new THREE.ShaderMaterial({
 		uniforms: {
 			tScene: { value: rtFinal.texture },
+			tGlow: { value: rtGlow.texture },
 			uRes: res,
 			uW: { value: CFG.fx.fluteWidth * DPR },
-			uAmt: { value: CFG.fx.flute },
+			uShift: { value: CFG.fx.flute * DPR },
 			uBloom: { value: CFG.bloom },
 			uBloomR: { value: 13 * DPR },
 		},
 		vertexShader: `void main(){ gl_Position = vec4(position.xy, 0.0, 1.0); }`,
 		fragmentShader: `
-      uniform sampler2D tScene; uniform vec2 uRes; uniform float uW, uAmt, uBloom, uBloomR;
+      uniform sampler2D tScene, tGlow; uniform vec2 uRes; uniform float uW, uShift, uBloom, uBloomR;
       void main(){
         vec2 p = gl_FragCoord.xy;
         // 세로 골 + 가로 골 (격자 유리): 골 안 위치 0~1, 가운데 0 · 양끝 ±0.5
         float tx = fract(p.x / uW), ty = fract(p.y / uW);
         vec2 b = vec2(tx, ty) - 0.5;
-        // 골마다 원통 렌즈처럼 밀어 냄 → 경계에서 이미지가 계단처럼 어긋남 (가로·세로 모두)
-        vec2 uv = (p + b * uW * uAmt) / uRes;
+        // 골마다 원통 렌즈처럼 밀어 냄 → 경계에서 이미지가 계단처럼 어긋남 (가로·세로 모두, 골 양끝에서 최대 uShift px)
+        vec2 uv = (p + b * 2.0 * uShift) / uRes;
         // 골 끝으로 갈수록 살짝 색 갈라짐
-        vec2 ca = b * uW * uAmt * 0.08 / uRes;
+        vec2 ca = b * 2.0 * uShift * 0.08 / uRes;
         vec2 px = vec2(1.0, 1.0) / uRes * 1.1; // 골 안쪽 살짝 뿌옇게 (대각 3샘플)
         vec4 c = vec4(0.0);
         for (int i = -1; i <= 1; i++) {
@@ -818,24 +820,20 @@
           c += vec4(texture2D(tScene, q + ca).r, g.g, texture2D(tScene, q - ca).b, g.a);
         }
         c /= 3.0;
-        // 블룸: 도형의 밝은 부분만 원형으로 모아 은은하게 번지게 (글자는 이 레이어에 없으므로 안 번짐)
+        // 블룸: 도형의 밝은 부분만 원형으로 모아 은은하게 번지게 (글자는 번지지 않음)
         vec3 bl = vec3(0.0);
         if (uBloom > 0.0) {
           for (int i = 0; i < 12; i++) {
             float a = float(i) * 0.5236;
             for (int j = 1; j <= 2; j++) {
               vec2 o = vec2(cos(a), sin(a)) * uBloomR * float(j) / uRes;
-              bl += max(texture2D(tScene, uv + o).rgb - 0.55, 0.0);
+              bl += max(texture2D(tGlow, uv + o).rgb - 0.55, 0.0);
             }
           }
           bl *= uBloom / 24.0;
         }
-        // 프리멀티플라이 출력: 도형(+번짐)만 화면 위에 얹힘, 도형 밖은 투명 → 뒤 배경·글자는 칸막이 영향 없음
-        float a = clamp(c.a + dot(bl, vec3(0.333)), 0.0, 1.0);
-        gl_FragColor = vec4(c.rgb + bl, a);
+        gl_FragColor = vec4(c.rgb + bl, 1.0);
       }`,
-		transparent: true,
-		premultipliedAlpha: true,
 		depthTest: false,
 		depthWrite: false,
 	});
@@ -860,6 +858,7 @@
 		rtBg.setSize(W * DPR, H * DPR);
 		rtBack.setSize(W * DPR, H * DPR);
 		rtFinal.setSize(W * DPR, H * DPR);
+		rtGlow.setSize(W * DPR, H * DPR);
 		res.value.set(W * DPR, H * DPR);
 		redrawTitle(W, H);
 		camera.aspect = W / H;
@@ -1192,24 +1191,23 @@
 		prism.material = backMat;
 		renderer.render(scene, camera);
 		prism.material = frontMat;
+		// [TEST] 칸막이가 있으면 배경·글자·도형·PROJECT 전체를 한 장에 그린 뒤 골 유리로 굴절시켜 화면에
+		renderer.setRenderTarget(FLUTE ? rtFinal : null);
+		renderer.clear();
+		renderer.render(bgScene, orthoCam);
+		renderer.render(scene, camera);
+		if (projChars.some((c) => Math.abs(c.v) < 1)) renderer.render(projScene, orthoCam); // 보이는 글자가 있을 때만
 		if (FLUTE) {
-			// [TEST] 칸막이: 도형만 투명 배경 위에 따로 그린 뒤, 배경·글자 위에 골 유리로 굴절시켜 얹음 (글자는 영향 없음)
-			renderer.setRenderTarget(rtFinal);
-			renderer.setClearAlpha(0);
-			renderer.clear();
-			renderer.render(scene, camera);
-			renderer.setClearAlpha(1);
+			if (CFG.bloom > 0) {
+				// 도형만 검은 배경에 한 번 더 → 번짐 재료
+				renderer.setRenderTarget(rtGlow);
+				renderer.clear();
+				renderer.render(scene, camera);
+			}
 			renderer.setRenderTarget(null);
 			renderer.clear();
-			renderer.render(bgScene, orthoCam);
 			renderer.render(fluteScene, orthoCam);
-		} else {
-			renderer.setRenderTarget(null);
-			renderer.clear();
-			renderer.render(bgScene, orthoCam);
-			renderer.render(scene, camera);
 		}
-		if (projChars.some((c) => Math.abs(c.v) < 1)) renderer.render(projScene, orthoCam); // [TEST] 보이는 글자가 있을 때만
 	}
 	tick();
 })();
